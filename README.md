@@ -5,14 +5,14 @@ It combines traditional expense tracking with forecasting, credit optimization, 
 
 ---
 
-## 🧭 Overview
+## Overview
 
 Align is structured around **five core pillars**, each designed as an independent module that contributes to a unified data model.  
 Every feature — from forecasting to credit analysis — is powered by a single, consistent foundation of transaction data, allowing for deep insight without redundancy.
 
 ---
 
-## 🧾 Pillar 1 — Expense Tracking Engine
+## Pillar 1 — Expense Tracking Engine
 
 **Purpose:** Capture, categorize, and enrich every financial transaction with flexible tagging and metadata.
 
@@ -33,7 +33,7 @@ Every feature — from forecasting to credit analysis — is powered by a single
 
 ---
 
-## 💝 Pillar 2 — Value & Goal Analytics
+## Pillar 2 — Value & Goal Analytics
 
 **Purpose:** Quantify how well your spending aligns with your priorities, values, and long-term objectives.
 
@@ -49,7 +49,7 @@ Every feature — from forecasting to credit analysis — is powered by a single
 
 ---
 
-## 📆 Pillar 3 — Cash Flow Forecasting
+## Pillar 3 — Cash Flow Forecasting
 
 **Purpose:** Model how money will move in the future — not just what has happened.
 
@@ -68,7 +68,7 @@ Every feature — from forecasting to credit analysis — is powered by a single
 
 ---
 
-## 💳 Pillar 4 — Credit Optimization Module
+## Pillar 4 — Credit Optimization Module
 
 **Purpose:** Use your real spending data to make credit decisions that actually benefit you.
 
@@ -86,7 +86,7 @@ Every feature — from forecasting to credit analysis — is powered by a single
 
 ---
 
-## 🚘 Pillar 5 — Asset Expense Modeling
+## Pillar 5 — Asset Expense Modeling
 
 **Purpose:** Treat major assets (like vehicles) as micro-ecosystems of cost and value.
 
@@ -104,7 +104,7 @@ Every feature — from forecasting to credit analysis — is powered by a single
 
 ---
 
-## 🔗 How the Pillars Fit Together
+## How the Pillars Fit Together
 
 | Pillar | Inputs | Outputs | Feeds Into |
 |--------|---------|----------|------------|
@@ -118,7 +118,7 @@ Everything shares a **common data backbone**, ensuring that insights in one area
 
 ---
 
-## 🧰 Technology Stack (Proposed)
+## Technology Stack (Proposed)
 - **Database:** PostgreSQL or SQLite (modular schema design)  
 - **Backend:** Python (FastAPI / Flask) or Node.js  
 - **Data Layer:** Pandas for analytics and transformation  
@@ -127,7 +127,7 @@ Everything shares a **common data backbone**, ensuring that insights in one area
 
 ---
 
-## 🧩 Example Use Case
+## Example Use Case
 
 1. You import all transactions from your bank accounts into **Align**.  
 2. The Expense Tracking Engine automatically categorizes and tags them.  
@@ -138,12 +138,12 @@ Everything shares a **common data backbone**, ensuring that insights in one area
 
 ---
 
-## 💡 Vision Statement
+## Vision Statement
 
 Align isn’t just about balancing a budget — it’s about **aligning financial behavior with purpose**.  
 By uniting data integrity, foresight, and moral clarity, Align provides a framework for long-term financial stewardship that’s both rational and value-driven.
 
 ---
 
-## 📜 License
+## License
 *(You can insert your chosen license here, e.g., MIT or GPL.)*
