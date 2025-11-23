@@ -98,19 +98,25 @@ Represents subcomponents of a transaction.
 
 ## 2.3 `accounts`
 
-Represents bank/credit/cash accounts.
+Represents bank, credit, cash, investment, or other financial accounts.
 
 **Fields:**
 
 * `id`
 * `user_id`
 * `name`
-* `type` (checking, savings, credit, cash, etc.)
+* `type` (checking, savings, credit, loan, cash, investment, etc.)
 * `institution_name`
 * `currency`
-* `balance_cached`
+* `balance_cached` (optional performance optimization)
 * `balance_as_of`
 * `last_synced_at`
+* `metadata` (json object for sync configuration or notes)
+
+**Purpose:**
+
+* The authoritative list of accounts the user interacts with.
+* Used for balance tracking, forecasting, credit analysis, and account‑level reporting.
 
 ---
 
@@ -173,18 +179,15 @@ Defines recurring or expected future expenses.
 
 ---
 
-## 2.8 `mileage_entries`
+## 2.8 (Reserved for Future Extensions)
 
-Tracks mileage usage for assets (vehicles).
+This slot previously referenced asset‑specific tables such as `vehicles` or `mileage_entries`. These **do not belong to the core data model** and have been intentionally removed.
 
-**Fields:**
+Asset‑related entities will be fully defined in:
 
-* `id`
-* `vehicle_id`
-* `date`
-* `odometer`
-* `miles_since_prev`
-* `transaction_id` (fk, fuel or maintenance)
+* `docs/asset-model.md`
+
+The core ledger remains asset‑agnostic.
 
 ---
 
@@ -207,9 +210,23 @@ Stores before/after snapshots for transparency.
 
 # 3. Supplemental Entities
 
-Entities that support advanced features but do not belong to the strict core.
+Entities that support advanced features but do not belong to the strict core ledger. Asset‑related entities have been intentionally moved to their own pillar specifications (e.g., `asset-model.md`).
 
 ## 3.1 `payment_methods`
+
+Represents credit cards or other payment instruments used for transactions.
+
+**Fields:**
+
+* `id`
+* `user_id`
+* `account_id` (fk)
+* `network` (Visa, Mastercard, etc.)
+* `last4`
+* `is_active`
+* `rewards_profile_id` (for credit optimization)
+
+---
 
 Cards or payment instruments.
 
@@ -229,13 +246,12 @@ Used only if multi-currency support is enabled.
 erDiagram
   accounts ||--o{ transactions : contains
   transactions ||--|{ transaction_splits : splits
-  transactions }o--|| merchants : "normalized from"
-  transactions }o--|| categories : "categorized as"
+  transactions }o--|| merchants : normalizes
+  transactions }o--|| categories : categorized_as
   transactions }o--|| import_batches : imported_via
   transactions }o--|{ tags : tagged_with
   categories ||--|{ categories : parent
   recurring_templates ||--o{ transactions : generates
-  vehicles ||--o{ mileage_entries : has
 ```
 
 ---
