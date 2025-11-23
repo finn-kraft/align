@@ -88,56 +88,63 @@ Each plugin focuses on a domain-specific capability:
 
 ```mermaid
 flowchart TB
-  %% Layer 1: Data Sources
-  subgraph Layer1[Layer 1: Data Sources]
-    A1[CSV / OFX Files]
-    A2[Bank API / Manual Entry]
-  end
+%% Layer 1: Data Sources
+subgraph Layer1[Layer 1: Data Sources]
+A1[CSV / OFX Files]
+A2[Bank API / Manual Entry]
+end
 
-  %% Layer 2: Core Engine
-  subgraph Layer2[Layer 2: Core Engine]
-    B1[Import Adapters]
-    B2[Normalization & Dedupe]
-    B3[Rules Engine]
-    B4[Canonical Ledger
-(Transactions, Splits, Accounts)]
-    B5[Audit & Reconciliation]
-  end
 
-  %% Layer 3: Plugin Pillars
-  subgraph Layer3[Layer 3: Pillars / Plugins]
-    C1[Value & Goals]
-    C2[Cashflow Forecasting]
-    C3[Credit Optimization]
-    C4[Asset Modeling]
-  end
+%% Layer 2: Core Engine
+subgraph Layer2[Layer 2: Core Engine]
+B1[Import Adapters]
+B2[Normalization & Dedupe]
+B3[Rules Engine]
+B4[Canonical Ledger]
+B4a[Transactions, Splits, Accounts]
+B5[Audit & Reconciliation]
+end
 
-  %% Layer 4: Decision Layer
-  subgraph Layer4[Layer 4: Decision & Insights]
-    D1[Reports]
-    D2[Scenario Tools]
-    D3[Dashboards / UI]
-  end
 
-  %% Connections
-  A1 --> B1
-  A2 --> B1
-  B1 --> B2
-  B2 --> B3
-  B3 --> B4
-  B4 --> B5
+%% Layer 3: Plugin Pillars
+subgraph Layer3[Layer 3: Pillars / Plugins]
+C1[Value & Goals]
+C2[Cashflow Forecasting]
+C3[Credit Optimization]
+C4[Asset Modeling]
+end
 
-  %% Core supports plugins
-  B4 --> C1
-  B4 --> C2
-  B4 --> C3
-  B4 --> C4
 
-  %% Plugins support decision layer
-  C1 --> Layer4
-  C2 --> Layer4
-  C3 --> Layer4
-  C4 --> Layer4
+%% Layer 4: Decision Layer
+subgraph Layer4[Layer 4: Decision & Insights]
+D1[Reports]
+D2[Scenario Tools]
+D3[Dashboards / UI]
+end
+
+
+%% Connections
+A1 --> B1
+A2 --> B1
+B1 --> B2
+B2 --> B3
+B3 --> B4
+B4 --> B4a
+B4a --> B5
+
+
+%% Core supports plugins
+B5 --> C1
+B5 --> C2
+B5 --> C3
+B5 --> C4
+
+
+%% Plugins support decision layer
+C1 --> Layer4
+C2 --> Layer4
+C3 --> Layer4
+C4 --> Layer4
 ```
 
 ---
