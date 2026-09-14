@@ -11,4 +11,5 @@ def rolling_average(values, *, window: int = 5) -> pd.Series:
     if not isinstance(window, int) or isinstance(window, bool) or window < 1:
         raise ValueError("window must be a positive integer.")
     numeric = pd.to_numeric(values, errors="coerce")
-    return numeric.rolling(window=window, min_periods=1).mean()
+    average = numeric.rolling(window=window, min_periods=1).mean()
+    return average.mask(numeric.isna())
