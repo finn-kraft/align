@@ -88,15 +88,15 @@ or other source-of-truth financial records.
 - [x] Define the saved-run schema and role boundary
 - [x] Create a dedicated worker branch
 - [x] Commit this roadmap and data contract
-- [ ] Add migration tooling and an additive saved-run migration
-- [ ] Extract a versioned, testable projection snapshot builder
-- [ ] Add repository tests for serialization and PostgreSQL persistence
-- [ ] Replace the local Save Scenario action with explicit **Save Run** UI
-- [ ] Add a run name and optional notes without changing calculations
-- [ ] Apply focused Cash Flow visual cleanup: settings grouping, action hierarchy,
+- [x] Add migration tooling and an additive saved-run migration
+- [x] Extract a versioned, testable projection snapshot builder
+- [x] Add repository tests for serialization and PostgreSQL persistence
+- [x] Replace the local Save Scenario action with explicit **Save Run** UI
+- [x] Add a run name and optional notes without changing calculations
+- [x] Apply focused Cash Flow visual cleanup: settings grouping, action hierarchy,
       clearer section labels, and consistent spacing
-- [ ] Run the full test suite after each executable change
-- [ ] Update this checklist and open a reviewable pull request
+- [x] Run the full test suite after each executable change
+- [x] Update this checklist and open a reviewable pull request
 
 ## First UI Changes
 
@@ -105,3 +105,11 @@ rename **Save Scenario** to **Save Run**, separate primary actions from loading,
 and group model settings, recurring assumptions, and projection actions more
 clearly. Visual changes will follow only after the persistence contract and
 tests are in place.
+
+## Verification
+
+- The saved-run module and repository tests pass with
+  `PYTHONPATH=. python -m unittest discover -s tests -v` (4 tests).
+- `cashflow/cashflow.py` passes Python syntax validation.
+- The PostgreSQL migration is committed only. It has not been applied to any
+  database.
