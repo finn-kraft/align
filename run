@@ -37,8 +37,11 @@ case "$MODE" in
   test)
     exec "$VENV_DIR/bin/python" -m unittest discover -s "$ROOT_DIR/tests" -v
     ;;
+  gas)
+    exec "$VENV_DIR/bin/python" -m gas.process_data
+    ;;
   *)
-    echo "Usage: $0 [shiny|test]" >&2
+    echo "Usage: $0 [shiny|test|gas]" >&2
     exit 2
     ;;
 esac
