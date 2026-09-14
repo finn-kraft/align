@@ -47,7 +47,10 @@ case "$MODE" in
     "$VENV_DIR/bin/python" -m compileall -q -x '/\.venv/' "$ROOT_DIR"
     "$VENV_DIR/bin/python" -c 'import jinja2, shiny, psycopg; print("Align environment is ready.")'
     ;;
-  gas)\n    shift\n    exec "$VENV_DIR/bin/python" -m gas.pipeline "$@"\n    ;;
+  gas)
+    shift
+    exec "$VENV_DIR/bin/python" -m gas.pipeline "$@"
+    ;;
   *)
     echo "Usage: $0 [shiny|test|install|doctor|gas]" >&2
     exit 2

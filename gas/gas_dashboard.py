@@ -14,7 +14,8 @@ DATA_FILE = os.path.join(BASE_DIR, "data", "processed_data.csv")
 # ----------------------------
 def gas_ui():
     return ui.page_fluid(
-        ui.h1("⛽ Fuel Efficiency & Cost Dashboard"),\n        ui.output_text("data_quality_summary"),
+        ui.h1("⛽ Fuel Efficiency & Cost Dashboard"),
+        ui.output_text("data_quality_summary"),
 
         ui.hr(),
         ui.h3("MPG vs Odometer"),
