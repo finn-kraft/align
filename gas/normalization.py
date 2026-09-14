@@ -51,7 +51,7 @@ _ALIASES = {
     "total_cost": ("Total Cost", "total_cost", "Cost", "cost", "Amount", "amount"),
     "vehicle": ("Vehicle", "vehicle"),
     "station": ("Station", "station"),
-    "notes": ("Notes", "notes", "Description", "description"),
+    "notes": ("Notes", "notes", "Description", "description", "Trip Type", "trip_type"),
 }
 
 

@@ -24,6 +24,36 @@ class GasPipelineTests(unittest.TestCase):
         self.assertEqual(row["PricePerGallon"], "3.5")
         self.assertEqual(row["CostPerMile"], "0.14")
         self.assertEqual(row["Month"], "2026-01")
+        self.assertEqual(row["Data Quality"], "ok")
+
+    def test_flags_missing_intervals_and_bad_prices_without_inventing_corrections(self):
+        result = build_gas_analytics(
+            [
+                {"Timestamp": "2026-01-01", "Odometer": "100", "Gallons": "10", "Total Cost": "30"},
+                {"Timestamp": "2026-02-01", "Odometer": "1100", "Gallons": "10", "Total Cost": "120", "Trip Type": "Missing data from previous tanks"},
+            ],
+            source_name="sheet",
+        )
+        row = result.analytics_rows[0]
+        self.assertEqual(row["TripMPG"], "100")
+        self.assertEqual(row["TripMPG_clean"], "")
+        self.assertEqual(row["CostPerMile"], "")
+        self.assertIn("missing_fills", row["Quality Flags"])
+        self.assertIn("implausible_price", row["Quality Flags"])
+        self.assertGreaterEqual(len(result.quality_issues), 3)
+
+    def test_retains_plausible_metrics_for_explicitly_aggregated_fills(self):
+        result = build_gas_analytics(
+            [
+                {"Timestamp": "2026-01-01", "Odometer": "100", "Gallons": "10", "Total Cost": "30"},
+                {"Timestamp": "2026-02-01", "Odometer": "1100", "Gallons": "32", "Total Cost": "100"},
+            ],
+            source_name="sheet",
+        )
+        row = result.analytics_rows[0]
+        self.assertEqual(row["TripMPG_clean"], "31.25")
+        self.assertEqual(row["Data Quality"], "warning")
+        self.assertEqual(row["Quality Flags"], "aggregated_fills")
 
     def test_pipeline_writes_analytics_and_rejections_without_overwriting_source(self):
         with TemporaryDirectory() as directory:
