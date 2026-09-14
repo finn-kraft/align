@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from gas.pipeline import build_gas_analytics, run_pipeline
+from gas.pipeline import build_gas_analytics, ensure_processed_data, run_pipeline
 from gas import process_data
 
 
@@ -76,6 +76,43 @@ class GasPipelineTests(unittest.TestCase):
         self.assertEqual(process_data.INPUT_FILE.name, "live_data.csv")
         self.assertEqual(process_data.OUTPUT_FILE.name, "processed_data.csv")
         self.assertEqual(process_data.REJECTED_FILE.name, "rejected_rows.csv")
+
+
+    def test_prepares_dashboard_data_when_source_is_newer(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "live_data.csv"
+            output = root / "processed_data.csv"
+            rejected = root / "rejected_rows.csv"
+            source.write_text(
+                "Timestamp,Odometer,Gallons,Total Cost\\n"
+                "2026-01-01,100,10,30\\n"
+                "2026-01-10,300,8,28\\n",
+                encoding="utf-8",
+            )
+
+            refreshed = ensure_processed_data(
+                source, output, rejected, source_name="local:gas", default_vehicle="Jetta"
+            )
+
+            self.assertTrue(refreshed)
+            self.assertIn("TripMPG_clean", output.read_text(encoding="utf-8"))
+            self.assertFalse(
+                ensure_processed_data(
+                    source, output, rejected, source_name="local:gas", default_vehicle="Jetta"
+                )
+            )
+
+    def test_missing_source_is_explicit(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(FileNotFoundError, "No gas source file found"):
+                ensure_processed_data(
+                    root / "missing.csv",
+                    root / "processed.csv",
+                    root / "rejected.csv",
+                    source_name="local:gas",
+                )
 
 
 if __name__ == "__main__":

@@ -107,6 +107,35 @@ def run_pipeline(input_path: Path, output_path: Path, rejected_path: Path, *, so
     return result
 
 
+
+def ensure_processed_data(
+    input_path: Path,
+    output_path: Path,
+    rejected_path: Path,
+    *,
+    source_name: str,
+    default_vehicle: str | None = None,
+) -> bool:
+    """Prepare dashboard data when a source export is new or has changed.
+
+    Returns True when the derived files were refreshed. The source export is
+    never modified. A missing source is reported to the caller so the UI can
+    show an actionable empty state instead of silently presenting empty charts.
+    """
+
+    if not input_path.exists():
+        raise FileNotFoundError(f"No gas source file found: {input_path}")
+    if output_path.exists() and output_path.stat().st_mtime_ns >= input_path.stat().st_mtime_ns:
+        return False
+    run_pipeline(
+        input_path,
+        output_path,
+        rejected_path,
+        source_name=source_name,
+        default_vehicle=default_vehicle,
+    )
+    return True
+
 def _analytics_row(entry: GasEntry, miles: Decimal, trip_mpg: Decimal, cleaned_mpg: Decimal | None, clean_mpg: list[Decimal], price_per_gallon: Decimal, per_mile: Decimal | None, cost_per_mile: list[Decimal], issues: list[GasQualityIssue]) -> dict[str, str]:
     rolling_mpg = "" if not clean_mpg else _number(sum(clean_mpg[-5:]) / Decimal(len(clean_mpg[-5:])))
     ma10 = "" if len(cost_per_mile) < 2 else _number(sum(cost_per_mile[-10:]) / Decimal(len(cost_per_mile[-10:])))
