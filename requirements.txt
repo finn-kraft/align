@@ -1,4 +1,12 @@
-matplotlib
-pandas
+fastapi>=0.115,<1
+google-api-python-client>=2.0,<3
+google-auth>=2.0,<3
+google-auth-oauthlib>=1.0,<2
+matplotlib>=3.8,<4
+numpy>=1.26,<3
+pandas>=2.2,<3
+plotly>=5.0,<7
 psycopg[binary]>=3.1,<4
-shiny
+shiny>=1.0,<2
+shinywidgets>=0.3,<1
+uvicorn[standard]>=0.30,<1
