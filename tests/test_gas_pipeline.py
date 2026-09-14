@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from gas.pipeline import build_gas_analytics, run_pipeline
+from gas import process_data
 
 
 class GasPipelineTests(unittest.TestCase):
@@ -40,6 +41,11 @@ class GasPipelineTests(unittest.TestCase):
             self.assertIn("odometer must increase", rejected.read_text(encoding="utf-8"))
             with source.open(encoding="utf-8") as source_file:
                 self.assertEqual(len(list(csv.DictReader(source_file))), 2)
+
+    def test_legacy_processing_command_targets_the_pipeline_files(self):
+        self.assertEqual(process_data.INPUT_FILE.name, "live_data.csv")
+        self.assertEqual(process_data.OUTPUT_FILE.name, "processed_data.csv")
+        self.assertEqual(process_data.REJECTED_FILE.name, "rejected_rows.csv")
 
 
 if __name__ == "__main__":

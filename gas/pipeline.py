@@ -9,6 +9,7 @@ records.
 from __future__ import annotations
 
 import csv
+import argparse
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -110,3 +111,20 @@ def _atomic_write_csv(path: Path, fieldnames: tuple[str, ...], rows: Iterable[Ma
 
 def _number(value: Decimal) -> str:
     return format(value, "f")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Validate and process Align gas source data.")
+    parser.add_argument("--input", type=Path, default=Path(__file__).parent / "data" / "live_data.csv")
+    parser.add_argument("--output", type=Path, default=Path(__file__).parent / "data" / "processed_data.csv")
+    parser.add_argument("--rejected", type=Path, default=Path(__file__).parent / "data" / "rejected_rows.csv")
+    parser.add_argument("--source-name", default="google-sheet:jetta")
+    arguments = parser.parse_args()
+    if not arguments.input.exists():
+        raise SystemExit(f"No gas source file found: {arguments.input}")
+    result = run_pipeline(arguments.input, arguments.output, arguments.rejected, source_name=arguments.source_name)
+    print(f"Processed {len(result.analytics_rows)} dashboard rows; rejected {len(result.rejected_rows)} source rows.")
+
+
+if __name__ == "__main__":
+    main()

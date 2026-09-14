@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import os
 
 # --- Paths ---
-DATA_FILE = os.path.join("data/processed_data.csv")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))\nDATA_FILE = os.path.join(BASE_DIR, "data", "processed_data.csv")
 
 # ----------------------------
 # UI
