@@ -64,18 +64,22 @@ Never commit that file or use an owner/superuser credential. The application
 keeps Asset Modeling viewable when the variable is absent, but disables
 persistent vehicle creation until it is configured.
 
-The application never runs migrations. Review and apply them with a separate
-migration role only after approval:
+The application never runs migrations. Set a temporary
+`ALIGN_MIGRATION_DATABASE_URL` for a separate migration-capable role, then
+review and apply migrations only after approval:
 
 ```bash
-psql "$ALIGN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0001_create_cashflow_saved_runs.sql
-psql "$ALIGN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0002_create_vehicle_ownership.sql
-psql "$ALIGN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0003_vehicle_record_management.sql
+psql "$ALIGN_MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0001_create_cashflow_saved_runs.sql
+psql "$ALIGN_MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0002_create_vehicle_ownership.sql
+psql "$ALIGN_MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0003_vehicle_record_management.sql
+psql "$ALIGN_MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -v align_runtime_role=YOUR_APP_ROLE \
+  -f db/migrations/0004_grant_vehicle_runtime_permissions.sql
 ```
 
-The runtime role uses `SELECT, INSERT` for normal operation. Migration 0003
-adds narrowly scoped `UPDATE, DELETE` rights for vehicle records and installs
-database-enforced edit/delete auditing. It must not be a superuser, owner, or
+Migration 0003 installs database-enforced vehicle edit/delete auditing.
+Migration 0004 grants the named runtime role only `SELECT`, `INSERT`,
+`UPDATE`, and `DELETE` on vehicle records plus read access to the audit log. It must not be a superuser, owner, or
 migration role.
 
 See [Vehicle Ownership Tracking](docs/vehicle-ownership.md) for what to record
