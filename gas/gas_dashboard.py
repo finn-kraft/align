@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from .pipeline import ensure_processed_data, run_pipeline
+from .series import rolling_average
 
 # --- Paths ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -198,12 +199,25 @@ def gas_server(input, output, session):
         if d.empty:
             return
 
+        plot_data = d.sort_values("Odometer").copy()
+        plot_data["MPG Rolling Average"] = rolling_average(
+            plot_data["TripMPG_clean"], window=5
+        )
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=d["Odometer"],
-            y=d["TripMPG_clean"],
+            x=plot_data["Odometer"],
+            y=plot_data["TripMPG_clean"],
             mode="lines+markers",
-            name="Trip MPG"
+            name="Trip MPG",
+            line={"width": 1},
+            opacity=0.55,
+        ))
+        fig.add_trace(go.Scatter(
+            x=plot_data["Odometer"],
+            y=plot_data["MPG Rolling Average"],
+            mode="lines",
+            name="5-fill rolling average",
+            line={"width": 4},
         ))
         return fig
 
@@ -215,12 +229,25 @@ def gas_server(input, output, session):
         if d.empty:
             return
 
+        plot_data = d.sort_values("Timestamp").copy()
+        plot_data["Cost Rolling Average"] = rolling_average(
+            plot_data["CostPerMile"], window=5
+        )
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=d["Timestamp"],
-            y=d["CostPerMile"],
+            x=plot_data["Timestamp"],
+            y=plot_data["CostPerMile"],
             mode="lines+markers",
-            name="Cost/Mile"
+            name="Cost/Mile",
+            line={"width": 1},
+            opacity=0.55,
+        ))
+        fig.add_trace(go.Scatter(
+            x=plot_data["Timestamp"],
+            y=plot_data["Cost Rolling Average"],
+            mode="lines",
+            name="5-fill rolling average",
+            line={"width": 4},
         ))
         return fig
 
