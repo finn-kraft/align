@@ -73,7 +73,7 @@ Status: **in progress**
 ### Version 4 — Gas Data
 
 - [x] Replace script-only processing with a validated, traceable file pipeline
-- [x] Normalize source dates, numbers, missing values, and duplicate observations with tests
+- [x] Normalize source dates, numbers, missing values, and duplicate observations with tests\n- [x] Parse multi-header Sheet exports and preserve physical source-row traceability\n- [x] Flag questionable intervals and exclude unreliable metrics without inventing corrections
 - [ ] Add database persistence feature-by-feature
 - [ ] Rebuild gas analytics and mobile-friendly gas entry in React
 - [x] Retain source row, raw-source fields, and stable source fingerprints during normalization
