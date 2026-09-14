@@ -1,12 +1,14 @@
 """Validated, framework-independent contracts for Align's public API."""
 
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from math import isfinite
 from typing import Any, Mapping
 
 from cashflow.projection import MONTHS
 
 from .errors import RequestValidationError
+from vehicles.tco import OwnershipCost, VehicleTcoScenario
 
 
 def _number(value: Any, field: str) -> float:
@@ -25,6 +27,18 @@ def _mapping(value: Any, field: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise RequestValidationError(f"{field} must be an object.")
     return value
+
+
+def _decimal(value: Any, field: str) -> Decimal:
+    if isinstance(value, bool):
+        raise RequestValidationError(f"{field} must be numeric.")
+    try:
+        converted = Decimal(str(value))
+    except (InvalidOperation, ValueError) as error:
+        raise RequestValidationError(f"{field} must be numeric.") from error
+    if not converted.is_finite():
+        raise RequestValidationError(f"{field} must be finite.")
+    return converted
 
 
 @dataclass(frozen=True)
@@ -126,3 +140,42 @@ class SaveCashflowRunRequest:
             notes=notes.strip() if notes and notes.strip() else None,
             scenario=CashflowProjectionRequest.from_mapping(_mapping(data.get("scenario"), "scenario")),
         )
+
+
+@dataclass(frozen=True)
+class VehicleTcoRequest:
+    """Validated API request wrapping the deterministic vehicle TCO model."""
+
+    scenario: VehicleTcoScenario
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, Any]) -> "VehicleTcoRequest":
+        data = _mapping(payload, "request")
+        raw_costs = data.get("costs", [])
+        if not isinstance(raw_costs, list):
+            raise RequestValidationError("costs must be an array.")
+        costs = []
+        for index, raw_cost in enumerate(raw_costs):
+            cost = _mapping(raw_cost, f"costs.{index}")
+            try:
+                costs.append(
+                    OwnershipCost(
+                        name=str(cost.get("name", "")),
+                        amount=_decimal(cost.get("amount"), f"costs.{index}.amount"),
+                        basis=cost.get("basis"),
+                    )
+                )
+            except ValueError as error:
+                raise RequestValidationError(str(error)) from error
+        try:
+            scenario = VehicleTcoScenario(
+                vehicle_name=str(data.get("vehicle_name", "")),
+                duration_months=int(data.get("duration_months")),
+                costs=tuple(costs),
+                expected_resale_value=_decimal(data.get("expected_resale_value", 0), "expected_resale_value"),
+                starting_odometer=None if data.get("starting_odometer") is None else _decimal(data["starting_odometer"], "starting_odometer"),
+                ending_odometer=None if data.get("ending_odometer") is None else _decimal(data["ending_odometer"], "ending_odometer"),
+            )
+        except (TypeError, ValueError) as error:
+            raise RequestValidationError(str(error)) from error
+        return cls(scenario)
