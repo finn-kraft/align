@@ -70,7 +70,7 @@ def gas_server(input, output, session):
                 DATA_FILE,
                 REJECTED_FILE,
                 source_name=f'upload:{record["name"]}',
-                default_vehicle="Jetta",
+                default_vehicle="2012 Volkswagen Jetta 2.5L SE",
             )
         except Exception as error:
             import_status.set(f"Import failed: {error}")
@@ -97,7 +97,7 @@ def gas_server(input, output, session):
                     DATA_FILE,
                     REJECTED_FILE,
                     source_name="google-sheet:jetta",
-                    default_vehicle="Jetta",
+                    default_vehicle="2012 Volkswagen Jetta 2.5L SE",
                 )
                 if refreshed:
                     import_status.set("Prepared the latest gas source export.")
@@ -189,7 +189,7 @@ def gas_server(input, output, session):
         med = monthly["TotalSpent"].median()
         std = monthly["TotalSpent"].std()
 
-        return f"Median Monthly: ${med:,.2f} | Std: ${std:,.2f}"
+        return f"Median Monthly: ${med:,.0f} | Std: ${std:,.0f}"
 
     # -------- Plot 1 --------
     @output
@@ -269,8 +269,10 @@ def gas_server(input, output, session):
         fig.add_trace(go.Bar(
             x=monthly["Date"],
             y=monthly["Total Cost"],
-            name="Monthly Spend"
+            name="Monthly Spend",
+            hovertemplate="%{x|%b %Y}<br>$%{y:,.0f}<extra></extra>",
         ))
+        fig.update_yaxes(tickprefix="$", tickformat=",.0f")
         return fig
 
     # -------- Table --------

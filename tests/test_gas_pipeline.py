@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from gas.pipeline import build_gas_analytics, ensure_processed_data, run_pipeline
+from gas.pipeline import JETTA_25_SE_PROFILE, build_gas_analytics, ensure_processed_data, run_pipeline, vehicle_profile_for
 from gas import process_data
 
 
@@ -113,6 +113,31 @@ class GasPipelineTests(unittest.TestCase):
                     root / "rejected.csv",
                     source_name="local:gas",
                 )
+
+
+    def test_2012_jetta_profile_excludes_15_and_40_mpg_without_changing_raw_values(self):
+        result = build_gas_analytics(
+            [
+                {"Timestamp": "2026-01-01", "Odometer": "100", "Gallons": "10", "Total Cost": "30"},
+                {"Timestamp": "2026-01-10", "Odometer": "500", "Gallons": "10", "Total Cost": "30"},
+                {"Timestamp": "2026-01-20", "Odometer": "650", "Gallons": "10", "Total Cost": "30"},
+                {"Timestamp": "2026-01-30", "Odometer": "900", "Gallons": "10", "Total Cost": "30"},
+            ],
+            source_name="sheet",
+            vehicle_profile=JETTA_25_SE_PROFILE,
+        )
+
+        self.assertEqual([row["TripMPG"] for row in result.analytics_rows], ["40", "15", "25"])
+        self.assertEqual([row["TripMPG_clean"] for row in result.analytics_rows], ["", "", "25"])
+        self.assertEqual(
+            [row["Quality Flags"] for row in result.analytics_rows[:2]],
+            ["vehicle_mpg_outlier", "vehicle_mpg_outlier"],
+        )
+
+    def test_vehicle_profile_requires_specific_year_engine_and_model(self):
+        self.assertEqual(vehicle_profile_for("2012 VW Jetta 2.5L SE"), JETTA_25_SE_PROFILE)
+        self.assertIsNone(vehicle_profile_for("Jetta"))
+        self.assertIsNone(vehicle_profile_for("2012 Jetta TDI"))
 
 
 if __name__ == "__main__":
