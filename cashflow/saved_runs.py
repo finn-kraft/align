@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any, Mapping
 from uuid import UUID, uuid4
 
+
 MODEL_VERSION = "cashflow-simulator/v1"
 
 
@@ -36,12 +37,41 @@ class SavedRunSnapshot:
     months: tuple[SavedRunMonth, ...]
 
 
+@dataclass(frozen=True)
+class SavedRunSummary:
+    """Metadata for an immutable saved run, without its monthly rows."""
+
+    id: UUID
+    created_at: datetime
+    model_version: str
+    name: str
+    notes: str | None
+    start_date: date
+    month_count: int
+    starting_cash: Decimal
+    apy: Decimal
+
+
+@dataclass(frozen=True)
+class PersistedSavedRun:
+    """A saved run exactly as stored, never recalculated on read."""
+
+    summary: SavedRunSummary
+    assumptions: dict[str, Any]
+    months: tuple[SavedRunMonth, ...]
+
+
 def _money(value: Any) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.01"))
 
 
 def _month_start(label: str) -> date:
     return datetime.strptime(label, "%b %Y").date().replace(day=1)
+
+
+def _month_key(label: str) -> str:
+    value = _month_start(label)
+    return f"{value.year}_{value.month:02d}"
 
 
 def _expense_categories(month_input: Mapping[str, Any]) -> dict[str, Any]:
@@ -80,14 +110,19 @@ def build_saved_run_snapshot(
     if len(projection) != state["months"]:
         raise ValueError("Projection length does not match the selected month count.")
 
-    month_keys = sorted(monthly_inputs)
+    month_keys = [_month_key(str(row["Month"])) for row in projection]
+    if len(set(month_keys)) != len(month_keys):
+        raise ValueError("Projection months must be unique.")
+    if set(monthly_inputs) != set(month_keys):
+        raise ValueError("Monthly inputs must exactly match the projected months.")
+
     assumptions = {
         "recurring": dict(state["recurring"]),
         "monthly_inputs": {key: dict(monthly_inputs[key]) for key in month_keys},
     }
     snapshot_months = []
     for index, row in enumerate(projection):
-        input_data = monthly_inputs.get(month_keys[index], {})
+        input_data = monthly_inputs[month_keys[index]]
         snapshot_months.append(
             SavedRunMonth(
                 month_index=index,

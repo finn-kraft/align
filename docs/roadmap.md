@@ -23,14 +23,17 @@ calculations, and introduce PostgreSQL feature-by-feature.
 
 ## Current Baseline
 
-- The Shiny application remains the running interface in `app.py`.
-- Cash-flow calculations remain in `cashflow/cashflow.py`.
-- An unapplied saved-run PostgreSQL migration and persistence layer already
-  exist on this branch.
-- Gas data is retrieved from a Google Sheet into CSV files, then processed by
-  pandas; it is not yet canonical PostgreSQL data.
-- No FastAPI, React, TypeScript, vehicle ingestion, or TCO implementation is
-  present.
+- Shiny remains the current application entry point in `app.py`.
+- The cash-flow numeric-input focus regression is fixed: changing a monthly
+  field no longer recreates the active input.
+- Deterministic cash-flow projection logic, request validation, and saved-run
+  services are framework-independent Python with unit tests.
+- Saved-run PostgreSQL migration and persistence code exist but the migration
+  remains unapplied.
+- Gas source rows now have a tested validation/normalization boundary; the
+  legacy Google Sheet script and dashboard have not yet been migrated to it.
+- FastAPI and its test client cannot currently be installed in this worker
+  environment because the configured package registry returns HTTP 403.
 
 ## Milestones
 
@@ -39,11 +42,15 @@ calculations, and introduce PostgreSQL feature-by-feature.
 Status: **in progress**
 
 - [x] Extract the existing deterministic cash-flow projection loop into a pure Python service with regression tests
+- [x] Fix the cash-flow numeric-input focus loss caused by reactive input replacement
+- [x] Add framework-independent request contracts and cash-flow application services
 - [ ] Add a minimal FastAPI application package
 - [ ] Add a tested `GET /api/health` endpoint
-- [ ] Establish API testing conventions without database access
-- [ ] Add configuration boundaries for environment-derived settings
-- [ ] Keep Shiny operational throughout
+- [x] Establish API-core testing conventions without database access
+- [x] Add configuration boundaries for environment-derived settings
+- [x] Audit direct Python runtime dependencies and ignore virtual environments and secrets
+- [x] Add `./run` for transparent `.venv` setup and test execution
+- [ ] Keep Shiny operational throughout and add an application smoke test
 
 ### Version 2 — React Foundation
 
@@ -55,9 +62,8 @@ Status: **in progress**
 
 ### Version 3 — Cash Flow API and UI
 
-- [ ] Extract simulator inputs and deterministic projection logic behind a
-      Python service boundary
-- [ ] Add cash-flow calculation and saved-run API endpoints
+- [x] Extract simulator inputs and deterministic projection logic behind a Python service boundary
+- [ ] Add cash-flow calculation and saved-run HTTP API endpoints
 - [ ] Migrate the cash-flow page to React without duplicating calculations
 - [ ] Add scenario history and run-detail views
 - [ ] Apply the saved-run migration only after explicit approval
@@ -65,10 +71,10 @@ Status: **in progress**
 ### Version 4 — Gas Data
 
 - [ ] Replace script-only ingestion with a validated, traceable pipeline
-- [ ] Normalize dates, numbers, missing values, and duplicates
+- [x] Normalize source dates, numbers, missing values, and duplicate observations with tests
 - [ ] Add database persistence feature-by-feature
 - [ ] Rebuild gas analytics and mobile-friendly gas entry in React
-- [ ] Retain source identifiers and raw-source traceability
+- [x] Retain source row, raw-source fields, and stable source fingerprints during normalization
 
 ### Version 5 — Vehicles
 
@@ -99,8 +105,10 @@ Status: **in progress**
       mobile behavior
 - [ ] Retire Shiny only after equivalent React routes are verified
 
-## Current Smallest Safe Task
+## Next Concrete Task
 
-Create a FastAPI application scaffold with a tested health endpoint. It must
-not import Shiny, connect to PostgreSQL, execute migrations, change existing
-cash-flow calculations, or alter financial data.
+Install FastAPI in a development or CI environment that can reach the package
+registry, then adapt the existing contracts and services into a minimal app
+with `GET /api/health` and cash-flow routes. In parallel, wire the gas
+normalizer into the legacy ingestion command without changing its established
+analytics formulas.

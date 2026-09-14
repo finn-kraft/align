@@ -5,6 +5,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import json
 from pathlib import Path
+from cashflow.month_state import ensure_month_defaults
 from cashflow.projection import generate_month_sequence, run_projection as calculate_projection
 from cashflow.saved_run_repository import save_run
 from cashflow.saved_runs import build_saved_run_snapshot
@@ -204,32 +205,14 @@ def cashflow_server(input, output, session):
     month_data = reactive.Value({})
 
     @reactive.effect
-    def sync_month_data():
-
+    @reactive.event(input.start_month, input.months)
+    def ensure_month_data():
         month_sequence = generate_month_sequence(input.start_month(), input.months())
-        current = month_data.get()
-        updated = current.copy()
-        changed = False   # 🔴 track changes
-
-        for month in month_sequence:
-            key = month["key"]
-
-            if key not in updated:
-                updated[key] = default_month_data()
-                changed = True
-
-            for field in default_month_data().keys():
-                input_id = f"{field}_{key}"
-
-                try:
-                    value = input[input_id]()
-                    if value is not None and updated[key][field] != value:
-                        updated[key][field] = value
-                        changed = True
-                except:
-                    pass
-
-        # 🔴 CRITICAL: only update if something changed
+        updated, changed = ensure_month_defaults(
+            month_data.get(),
+            [month["key"] for month in month_sequence],
+            default_month_data,
+        )
         if changed:
             month_data.set(updated)
 
