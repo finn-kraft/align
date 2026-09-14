@@ -23,9 +23,10 @@ REQUIREMENTS_HASH="$(sha256sum "$REQUIREMENTS_FILE" | awk '{print $1}')"
 dependencies_healthy() {
   "$VENV_DIR/bin/python" -m pip check >/dev/null 2>&1 || return 1
   "$VENV_DIR/bin/python" - <<'PY' >/dev/null 2>&1
-import fastapi, googleapiclient, google.auth, google_auth_oauthlib
+import fastapi, googleapiclient, google.auth, google_auth_oauthlib, jinja2
 import matplotlib, numpy, pandas, plotly, psycopg, shiny, shinywidgets, uvicorn
 PY
+  "$VENV_DIR/bin/python" -m compileall -q -x '/\.venv/' "$ROOT_DIR" || return 1
 }
 install_dependencies() {
   echo "Installing Align dependencies from requirements.txt..."
@@ -43,13 +44,14 @@ case "$MODE" in
   install) echo "Align dependencies are ready in $VENV_DIR." ;;
   doctor)
     "$VENV_DIR/bin/python" -m pip check
-    "$VENV_DIR/bin/python" -c 'import shiny, psycopg; print("Align environment is ready.")'
+    "$VENV_DIR/bin/python" -m compileall -q -x '/\.venv/' "$ROOT_DIR"
+    "$VENV_DIR/bin/python" -c 'import jinja2, shiny, psycopg; print("Align environment is ready.")'
     ;;
   gas)
     exec "$VENV_DIR/bin/python" -m gas.process_data
     ;;
   *)
-
+    echo "Usage: $0 [shiny|test|install|doctor|gas]" >&2
     exit 2
     ;;
 esac

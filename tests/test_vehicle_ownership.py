@@ -5,24 +5,28 @@ import unittest
 from uuid import UUID
 
 from assets.vehicle_ownership import VehicleCostEvent, as_money
-from assets.vehicle_repository import create_vehicle, record_cost_event
+from assets.vehicle_repository import create_vehicle, list_vehicles, record_cost_event
 
 
 class FakeCursor:
-    def __init__(self):
+    def __init__(self, rows=()):
         self.calls = []
         self.closed = False
+        self.rows = rows
 
-    def execute(self, sql, parameters):
+    def execute(self, sql, parameters=None):
         self.calls.append((sql, parameters))
 
     def close(self):
         self.closed = True
 
+    def fetchall(self):
+        return self.rows
+
 
 class FakeConnection:
-    def __init__(self):
-        self.cursor_instance = FakeCursor()
+    def __init__(self, rows=()):
+        self.cursor_instance = FakeCursor(rows)
         self.committed = False
         self.rolled_back = False
         self.closed = False
@@ -65,6 +69,19 @@ class VehicleOwnershipTests(unittest.TestCase):
         self.assertEqual(vehicle_id, connection.cursor_instance.calls[1][1][1])
         self.assertEqual("purchase", connection.cursor_instance.calls[1][1][3])
         self.assertTrue(connection.committed)
+
+    def test_saved_vehicle_can_be_loaded_for_display(self):
+        vehicle_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        connection = FakeConnection(rows=[(
+            vehicle_id, "Jetta", "Volkswagen", "Jetta", 2014,
+            date(2026, 1, 1), Decimal("120000"), None,
+        )])
+
+        vehicles = list_vehicles(connection_factory=lambda url: connection)
+
+        self.assertEqual(1, len(vehicles))
+        self.assertEqual(vehicle_id, vehicles[0].id)
+        self.assertEqual("Jetta", vehicles[0].name)
 
     def test_maintenance_and_repairs_are_recorded_as_distinct_categories(self):
         connection = FakeConnection()
