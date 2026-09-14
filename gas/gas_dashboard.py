@@ -54,17 +54,29 @@ def gas_server(input, output, session):
             print("ERROR:", e)
             return pd.DataFrame()
 
+    @output
+    @render.text
+    def data_quality_summary():
+        d = df()
+        if d.empty:
+            return "No processed gas data. Run ./run gas first."
+        if "Quality Flags" not in d:
+            return f"{len(d)} observations loaded. Reprocess data to add quality checks."
+        flagged = d["Quality Flags"].fillna("").astype(str).str.strip().ne("").sum()
+        reliable = d["TripMPG_clean"].notna().sum()
+        return f"{len(d)} intervals loaded | {reliable} reliable MPG intervals | {flagged} flagged for review"
+
     # -------- Efficiency --------
     @output
     @render.text
     def efficiency_summary():
         d = df()
         if d.empty or "TripMPG_clean" not in d:
-            return "No data"
+            return "No reliable data"
 
         avg = d["TripMPG_clean"].mean()
         med = d["TripMPG_clean"].median()
-        total_miles = d["MilesPerTank"].sum() - d["MilesPerTank"].iloc[0]
+        total_miles = d["MilesPerTank"].sum()
         std = d["TripMPG_clean"].std()
 
         rolling = d["TripMPG_clean"].rolling(5).mean().dropna()
