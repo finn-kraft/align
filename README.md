@@ -30,17 +30,42 @@ the environment automatically if installation was incomplete.
 ./run                 # Start the Shiny app
 ./run test            # Run the Python test suite
 ./run doctor          # Verify package installation
-./run install         # Force a dependency reinstall\n./run gas --input "/path/to/export.csv" --vehicle Jetta
+./run install         # Force a dependency reinstall
+./run gas --input "/path/to/export.csv" --vehicle Jetta
 ```
 
-The gas import accepts Google Sheet CSV exports even when report/formula rows\nappear above the actual headers. It preserves physical source-row numbers,\nwrites dashboard data to `gas/data/processed_data.csv`, and records fatal\nrejects in `gas/data/rejected_rows.csv`. Questionable observations remain\nvisible with quality flags; unreliable MPG or cost-per-mile values are excluded\nfrom their respective summaries instead of being silently corrected.\n\nIf creating `.venv` fails on Ubuntu/Debian, install the operating-system
+The Gas dashboard automatically prepares `gas/data/live_data.csv` when it
+is newer than the derived analytics file. A Sheet CSV can also be imported
+directly from the dashboard; `./run gas --input ...` remains available for
+command-line imports.
+
+The gas import accepts Google Sheet CSV exports even when report/formula rows
+appear above the actual headers. It preserves physical source-row numbers,
+writes dashboard data to `gas/data/processed_data.csv`, and records fatal
+rejects in `gas/data/rejected_rows.csv`. Questionable observations remain
+visible with quality flags; unreliable MPG or cost-per-mile values are excluded
+from their respective summaries instead of being silently corrected.
+
+If creating `.venv` fails on Ubuntu/Debian, install the operating-system
 package once with `sudo apt install python3-venv`, then run `./run` again.
 
 ## Database setup
 
 `ALIGN_DATABASE_URL` must be supplied outside source control and use a
-dedicated least-privilege application role. The application never runs
-migrations. Review and apply them with a separate migration role:
+dedicated least-privilege application role. For local development, put it in
+the gitignored repository-level `.env` file and `./run` will load it
+automatically:
+
+```dotenv
+ALIGN_DATABASE_URL=postgresql://align_app:password@localhost/align
+```
+
+Never commit that file or use an owner/superuser credential. The application
+keeps Asset Modeling viewable when the variable is absent, but disables
+persistent vehicle creation until it is configured.
+
+The application never runs migrations. Review and apply them with a separate
+migration role only after approval:
 
 ```bash
 psql "$ALIGN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0001_create_cashflow_saved_runs.sql

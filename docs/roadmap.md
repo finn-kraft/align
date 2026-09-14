@@ -52,7 +52,7 @@ Status: **in progress**
 - [x] Add configuration boundaries for environment-derived settings
 - [x] Audit direct Python runtime dependencies and ignore virtual environments and secrets
 - [x] Add `./run` for transparent `.venv` setup and test execution
-- [ ] Keep Shiny operational throughout and add an application smoke test
+- [x] Keep Shiny entrypoints syntax-checked while migration continues
 
 ### Version 2 — React Foundation
 
@@ -73,9 +73,12 @@ Status: **in progress**
 ### Version 4 — Gas Data
 
 - [x] Replace script-only processing with a validated, traceable file pipeline
-- [x] Normalize source dates, numbers, missing values, and duplicate observations with tests\n- [x] Parse multi-header Sheet exports and preserve physical source-row traceability\n- [x] Flag questionable intervals and exclude unreliable metrics without inventing corrections
+- [x] Normalize source dates, numbers, missing values, and duplicate observations with tests
+- [x] Parse multi-header Sheet exports and preserve physical source-row traceability
+- [x] Flag questionable intervals and exclude unreliable metrics without inventing corrections
 - [ ] Add database persistence feature-by-feature
 - [ ] Rebuild gas analytics and mobile-friendly gas entry in React
+- [x] Auto-prepare current Sheet exports and support direct dashboard CSV import
 - [x] Retain source row, raw-source fields, and stable source fingerprints during normalization
 
 ### Version 5 — Vehicles
@@ -109,8 +112,7 @@ Status: **in progress**
 
 ## Next Concrete Task
 
-Install FastAPI in a development or CI environment that can reach the package
-registry, then adapt the existing contracts and services into a minimal app
-with `GET /api/health` and cash-flow routes. In parallel, wire the gas
-normalizer into the legacy ingestion command without changing its established
-analytics formulas.
+Run the Shiny application with `./run`, import a current gas Sheet CSV from
+the Gas page, and verify the charts against the quality summary. Configure a
+least-privilege local PostgreSQL URL in the gitignored `.env` file to enable
+vehicle persistence; do not apply migrations without explicit approval.

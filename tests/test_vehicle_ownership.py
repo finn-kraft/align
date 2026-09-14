@@ -6,7 +6,7 @@ from uuid import UUID
 
 from assets.vehicle_ownership import VehicleCostEvent, as_money
 from assets.vehicle_repository import (
-    create_vehicle, delete_cost_event, delete_vehicle, delete_vehicle_and_costs,
+    create_vehicle, database_configured, delete_cost_event, delete_vehicle, delete_vehicle_and_costs,
     list_vehicles, record_cost_event, update_cost_event, update_vehicle,
 )
 
@@ -61,6 +61,15 @@ class VehicleOwnershipTests(unittest.TestCase):
             os.environ.pop("ALIGN_DATABASE_URL", None)
         else:
             os.environ["ALIGN_DATABASE_URL"] = self.old_url
+
+
+    def test_database_configuration_can_be_checked_without_connecting(self):
+        os.environ.pop("ALIGN_DATABASE_URL", None)
+        self.assertFalse(database_configured())
+        os.environ["ALIGN_DATABASE_URL"] = "   "
+        self.assertFalse(database_configured())
+        os.environ["ALIGN_DATABASE_URL"] = "postgresql://runtime@localhost/align"
+        self.assertTrue(database_configured())
 
     def test_money_and_event_validation(self):
         self.assertEqual(Decimal("12.35"), as_money("12.345"))

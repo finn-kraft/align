@@ -77,6 +77,13 @@ LOCK_VEHICLE = "SELECT name FROM vehicles WHERE id = %s FOR UPDATE"
 DELETE_VEHICLE_COSTS = "DELETE FROM vehicle_cost_events WHERE vehicle_id = %s"
 
 
+
+def database_configured() -> bool:
+    """Return whether vehicle persistence can be used without connecting."""
+
+    return bool(os.getenv("ALIGN_DATABASE_URL", "").strip())
+
+
 def database_url() -> str:
     """Require a dedicated runtime database URL from the environment."""
     url = os.getenv("ALIGN_DATABASE_URL")
