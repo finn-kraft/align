@@ -38,6 +38,7 @@ calculations, and introduce PostgreSQL feature-by-feature.
 
 Status: **in progress**
 
+- [x] Extract the existing deterministic cash-flow projection loop into a pure Python service with regression tests
 - [ ] Add a minimal FastAPI application package
 - [ ] Add a tested `GET /api/health` endpoint
 - [ ] Establish API testing conventions without database access
