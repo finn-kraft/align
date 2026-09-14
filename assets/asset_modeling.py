@@ -150,6 +150,7 @@ def asset_modeling_server(input, output, session):
     @output
     @render.table
     def ownership_summary():
+        refresh.get()
         try:
             rows = ownership_summaries()
         except Exception:
@@ -168,6 +169,7 @@ def asset_modeling_server(input, output, session):
     @output
     @render.table
     def maintenance_table():
+        refresh.get()
         vehicle_id = selected_vehicle_id()
         if vehicle_id is None:
             return pd.DataFrame({"Status": ["Select a vehicle to see individual oil changes, tires, and other maintenance."]})
@@ -180,6 +182,7 @@ def asset_modeling_server(input, output, session):
     @output
     @render.table
     def repairs_table():
+        refresh.get()
         vehicle_id = selected_vehicle_id()
         if vehicle_id is None:
             return pd.DataFrame({"Status": ["Select a vehicle to see repairs separately from maintenance."]})
