@@ -7,6 +7,15 @@ REQUIREMENTS_FILE="$ROOT_DIR/requirements.txt"
 STAMP_FILE="$VENV_DIR/.align-requirements.sha256"
 MODE="${1:-shiny}"
 
+# Optional local secrets file. It is gitignored; variables still enter the
+# application exclusively through the environment.
+if [ -f "$ROOT_DIR/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/.env"
+  set +a
+fi
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Align requires python3." >&2
   exit 1

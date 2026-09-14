@@ -9,7 +9,7 @@ from shiny import reactive, render, ui
 
 from .vehicle_ownership import VehicleCostEvent
 from .vehicle_repository import (
-    create_vehicle, delete_cost_event, delete_vehicle, delete_vehicle_and_costs,
+    create_vehicle, database_configured, delete_cost_event, delete_vehicle, delete_vehicle_and_costs,
     list_cost_events, list_vehicles, maintenance_breakdown, ownership_summaries,
     recent_repairs, record_cost_event, update_cost_event, update_vehicle,
 )
@@ -27,6 +27,7 @@ COST_CATEGORIES = {
 
 def asset_modeling_ui():
     """Render a vehicle tracker with separate maintenance and repair records."""
+    configured = database_configured()
     return ui.page_fluid(
         ui.h2("Asset Modeling — Vehicle Ownership"),
         ui.p("Track actual ownership cost. Purchase, maintenance, repairs, administrative costs, fuel, and other expenses remain separate."),
@@ -45,7 +46,7 @@ def asset_modeling_ui():
                     ui.input_numeric("vehicle_purchase_price", "Purchase price", value=0, min=0),
                     ui.input_numeric("vehicle_starting_odometer", "Starting odometer", value=None, min=0),
                 ),
-                ui.input_action_button("save_vehicle", "Add vehicle", class_="btn-primary"),
+                ui.input_action_button("save_vehicle", "Add vehicle", class_="btn-primary", disabled=not configured),
             ),
             ui.card(ui.card_header("Record an ownership cost"), ui.output_ui("vehicle_cost_form")),
         ),
@@ -61,11 +62,17 @@ def asset_modeling_ui():
 def asset_modeling_server(input, output, session):
     """Bind vehicle tracking forms to the restricted ownership repository."""
     refresh = reactive.Value(0)
-    status = reactive.Value("Add a vehicle to begin tracking its ownership costs.")
+    status = reactive.Value(
+        "Add a vehicle to begin tracking its ownership costs."
+        if database_configured()
+        else "Vehicle persistence is not configured. Add ALIGN_DATABASE_URL to .env and restart Align."
+    )
 
     @reactive.calc
     def vehicles():
         refresh.get()
+        if not database_configured():
+            return ()
         try:
             return list_vehicles()
         except RuntimeError as error:
@@ -85,8 +92,6 @@ def asset_modeling_server(input, output, session):
             return ()
         try:
             return list_cost_events(vehicle.id)
-        except Exception:
-            return ()
         except Exception:
             status.set("Asset data could not be loaded. Confirm the approved migration has been applied.")
             return ()
