@@ -33,10 +33,7 @@ the environment automatically if installation was incomplete.
 ./run install         # Force a dependency reinstall
 ```
 
-If creating `.venv` fails on Ubuntu/Debian, install the operating-system
-package once with `sudo apt install python3-venv`, then run `./run` again.
 
-## Database setup
 
 `ALIGN_DATABASE_URL` must be supplied outside source control and use a
 dedicated least-privilege application role. The application never runs
@@ -59,6 +56,7 @@ and how each category contributes to total cost of ownership.
 - `cashflow/` — cash-flow projection and saved-run code
 - `assets/` — vehicle ownership models, persistence, and Shiny UI
 - `gas/` — legacy Google Sheet ingestion and gas analytics
+- `vehicles/` — deterministic ownership-cost/TCO domain model
 - `db/migrations/` — reviewed, unapplied PostgreSQL migrations
 - `tests/` — Python unit tests
 - `docs/` — architecture and feature documentation

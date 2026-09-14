@@ -45,8 +45,11 @@ case "$MODE" in
     "$VENV_DIR/bin/python" -m pip check
     "$VENV_DIR/bin/python" -c 'import shiny, psycopg; print("Align environment is ready.")'
     ;;
+  gas)
+    exec "$VENV_DIR/bin/python" -m gas.process_data
+    ;;
   *)
-    echo "Usage: $0 [shiny|test|install|doctor]" >&2
+
     exit 2
     ;;
 esac
