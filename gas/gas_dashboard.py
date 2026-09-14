@@ -4,10 +4,16 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import os
+from pathlib import Path
+
+from .pipeline import ensure_processed_data, run_pipeline
 
 # --- Paths ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "data", "processed_data.csv")
+DATA_DIR = Path(BASE_DIR) / "data"
+LIVE_DATA_FILE = DATA_DIR / "live_data.csv"
+DATA_FILE = DATA_DIR / "processed_data.csv"
+REJECTED_FILE = DATA_DIR / "rejected_rows.csv"
 
 # ----------------------------
 # UI
@@ -15,6 +21,12 @@ DATA_FILE = os.path.join(BASE_DIR, "data", "processed_data.csv")
 def gas_ui():
     return ui.page_fluid(
         ui.h1("⛽ Fuel Efficiency & Cost Dashboard"),
+        ui.card(
+            ui.card_header("Gas data"),
+            ui.p("Import a Google Sheet CSV export, or place the latest export at gas/data/live_data.csv."),
+            ui.input_file("gas_source_file", "Import gas CSV", accept=[".csv"], multiple=False),
+            ui.output_text("gas_import_status"),
+        ),
         ui.output_text("data_quality_summary"),
 
         ui.hr(),
@@ -41,18 +53,62 @@ def gas_ui():
 # ----------------------------
 def gas_server(input, output, session):
 
+    refresh = reactive.Value(0)
+    import_status = reactive.Value("Checking for gas data…")
+
+    @reactive.effect
+    @reactive.event(input.gas_source_file)
+    def import_gas_source():
+        uploaded = input.gas_source_file()
+        if not uploaded:
+            return
+        record = uploaded[0]
+        try:
+            result = run_pipeline(
+                Path(record["datapath"]),
+                DATA_FILE,
+                REJECTED_FILE,
+                source_name=f'upload:{record["name"]}',
+                default_vehicle="Jetta",
+            )
+        except Exception as error:
+            import_status.set(f"Import failed: {error}")
+            return
+        refresh.set(refresh.get() + 1)
+        import_status.set(
+            f"Imported {len(result.analytics_rows)} intervals; "
+            f"rejected {len(result.rejected_rows)} rows; "
+            f"flagged {len(result.quality_issues)} quality issues."
+        )
+
+    @output
+    @render.text
+    def gas_import_status():
+        return import_status.get()
+
     @reactive.Calc
     def df():
-        if not os.path.exists(DATA_FILE):
-            print("CSV not found")
-            return pd.DataFrame()
-
+        refresh.get()
         try:
+            if LIVE_DATA_FILE.exists():
+                refreshed = ensure_processed_data(
+                    LIVE_DATA_FILE,
+                    DATA_FILE,
+                    REJECTED_FILE,
+                    source_name="google-sheet:jetta",
+                    default_vehicle="Jetta",
+                )
+                if refreshed:
+                    import_status.set("Prepared the latest gas source export.")
+            if not DATA_FILE.exists():
+                import_status.set("No gas source is available. Import a CSV above.")
+                return pd.DataFrame()
             d = pd.read_csv(DATA_FILE, parse_dates=["Timestamp"])
-            print("Loaded:", d.shape)
+            if d.empty:
+                import_status.set("The source was processed, but no valid intervals remain.")
             return d
-        except Exception as e:
-            print("ERROR:", e)
+        except Exception as error:
+            import_status.set(f"Gas data could not be prepared: {error}")
             return pd.DataFrame()
 
     @output
@@ -60,7 +116,7 @@ def gas_server(input, output, session):
     def data_quality_summary():
         d = df()
         if d.empty:
-            return "No processed gas data. Run ./run gas first."
+            return import_status.get()
         if "Quality Flags" not in d:
             return f"{len(d)} observations loaded. Reprocess data to add quality checks."
         flagged = d["Quality Flags"].fillna("").astype(str).str.strip().ne("").sum()
