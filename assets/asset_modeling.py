@@ -109,12 +109,20 @@ def asset_modeling_server(input, output, session):
             )
         except (RuntimeError, ValueError) as error:
             status.set(str(error))
+            ui.notification_show(str(error), type="error", duration=8)
             return
-        except Exception:
-            status.set("Vehicle was not saved. Confirm the vehicle migration and database role.")
+        except Exception as error:
+            message = (
+                "Vehicle was not saved. Confirm ALIGN_DATABASE_URL, migration 0002, "
+                f"and the database role. ({type(error).__name__})"
+            )
+            status.set(message)
+            ui.notification_show(message, type="error", duration=10)
             return
         refresh.set(refresh.get() + 1)
-        status.set("Vehicle saved. Its purchase price is included in total ownership cost.")
+        message = "Vehicle saved. Its purchase price is included in total ownership cost."
+        status.set(message)
+        ui.notification_show(message, type="message", duration=5)
 
     @reactive.effect
     @reactive.event(input.save_vehicle_cost)
