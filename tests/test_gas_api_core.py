@@ -27,6 +27,7 @@ class GasApiCoreTests(unittest.TestCase):
             self.assertEqual(response["summary"]["total_cost"], "28")
             self.assertEqual(response["summary"]["total_miles"], "200")
             self.assertEqual(response["summary"]["average_trip_mpg"], "25")
+            self.assertEqual(response["summary"]["quality_issue_count"], 0)
             self.assertEqual(response["records"][0]["Source Name"], "fixture")
 
     def test_reports_missing_or_invalid_derived_data(self):

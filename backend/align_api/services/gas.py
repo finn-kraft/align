@@ -30,10 +30,8 @@ def get_gas_dashboard(data_path: Path = DEFAULT_GAS_DATA) -> dict[str, Any]:
         total_cost = sum((_decimal(row["Total Cost"]) for row in rows), Decimal("0"))
         total_gallons = sum((_decimal(row["Gallons"]) for row in rows), Decimal("0"))
         total_miles = sum((_decimal(row["MilesPerTank"]) for row in rows), Decimal("0"))
-        average_mpg = (
-            sum((_decimal(row["TripMPG"]) for row in rows), Decimal("0")) / Decimal(len(rows))
-            if rows else None
-        )
+        reliable_mpg = [_decimal(row["TripMPG_clean"]) for row in rows if row.get("TripMPG_clean")]
+        average_mpg = sum(reliable_mpg, Decimal("0")) / Decimal(len(reliable_mpg)) if reliable_mpg else None
     except (InvalidOperation, KeyError) as error:
         raise DataFormatError("Processed gas data contains malformed numeric values.") from error
 
@@ -44,6 +42,7 @@ def get_gas_dashboard(data_path: Path = DEFAULT_GAS_DATA) -> dict[str, Any]:
             "total_gallons": _json_decimal(total_gallons),
             "total_miles": _json_decimal(total_miles),
             "average_trip_mpg": None if average_mpg is None else _json_decimal(average_mpg),
+            "quality_issue_count": sum(bool(row.get("Quality Flags")) for row in rows),
         },
         "records": rows,
     }
