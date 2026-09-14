@@ -30,8 +30,10 @@ calculations, and introduce PostgreSQL feature-by-feature.
   services are framework-independent Python with unit tests.
 - Saved-run PostgreSQL migration and persistence code exist but the migration
   remains unapplied.
-- Gas source rows now have a tested validation/normalization boundary; the
-  legacy Google Sheet script and dashboard have not yet been migrated to it.
+- Gas Sheet exports flow through validation, deduplication, derived analytics,
+  and the existing dashboard CSV without modifying the source export.
+- A deterministic vehicle TCO foundation separates observed costs from explicit
+  assumptions; vehicle-source ingestion is not yet available in the repository.
 - FastAPI and its test client cannot currently be installed in this worker
   environment because the configured package registry returns HTTP 403.
 
@@ -70,7 +72,7 @@ Status: **in progress**
 
 ### Version 4 — Gas Data
 
-- [ ] Replace script-only ingestion with a validated, traceable pipeline
+- [x] Replace script-only processing with a validated, traceable file pipeline
 - [x] Normalize source dates, numbers, missing values, and duplicate observations with tests
 - [ ] Add database persistence feature-by-feature
 - [ ] Rebuild gas analytics and mobile-friendly gas entry in React
@@ -86,7 +88,7 @@ Status: **in progress**
 
 ### Version 6 — Vehicle TCO
 
-- [ ] Implement deterministic Python total-cost-of-ownership calculations
+- [x] Implement deterministic Python total-cost-of-ownership calculations
 - [ ] Support historical analysis, forecasts, and scenario comparison
 - [ ] Add TCO API endpoints and React views
 - [ ] Cover calculations with unit tests and explicit assumptions

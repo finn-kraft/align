@@ -37,6 +37,16 @@ Run the test suite with:
 ./run test
 ```
 
+Process the current Google Sheet export after it has been retrieved into
+`gas/data/live_data.csv` with:
+
+```bash
+./run gas
+```
+
+This writes derived dashboard data and an auditable rejected-row report under
+`gas/data/`; it never modifies the source export.
+
 ## Configuration and secrets
 
 `ALIGN_DATABASE_URL` is the only database connection setting. It must contain
@@ -54,6 +64,7 @@ Git. See the gas ingestion code before configuring a Sheet source.
 - `cashflow/` — deterministic projection, saved-run, and Shiny adapter code
 - `backend/` — framework-independent API contracts and application services
 - `gas/` — legacy Google Sheet ingestion and gas analytics
+- `vehicles/` — deterministic ownership-cost/TCO domain model
 - `db/migrations/` — reviewed, unapplied PostgreSQL migrations
 - `tests/` — Python unit tests
 - `docs/` — architecture, canonical model, and migration roadmap
