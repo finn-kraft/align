@@ -69,13 +69,18 @@ class CashflowProjectionRequest:
             str(category): _number(amount, f"recurring.{category}")
             for category, amount in recurring_data.items()
         }
-        monthly_inputs = {
-            str(month_key): {
-                str(category): _number(amount, f"monthly_inputs.{month_key}.{category}")
-                for category, amount in _mapping(values, f"monthly_inputs.{month_key}").items()
-            }
-            for month_key, values in monthly_data.items()
-        }
+        monthly_inputs = {}
+        for month_key, values in monthly_data.items():
+            normalized = {}
+            for category, amount in _mapping(values, f"monthly_inputs.{month_key}").items():
+                category = str(category)
+                if category == "other_label":
+                    if not isinstance(amount, str):
+                        raise RequestValidationError(f"monthly_inputs.{month_key}.other_label must be text.")
+                    normalized[category] = amount
+                else:
+                    normalized[category] = _number(amount, f"monthly_inputs.{month_key}.{category}")
+            monthly_inputs[str(month_key)] = normalized
 
         return cls(
             months=months,
@@ -95,3 +100,29 @@ class CashflowProjectionRequest:
             "apy": self.apy,
             "recurring": self.recurring,
         }
+
+
+@dataclass(frozen=True)
+class SaveCashflowRunRequest:
+    """An explicit request to persist server-calculated scenario results."""
+
+    name: str
+    notes: str | None
+    scenario: CashflowProjectionRequest
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, Any]) -> "SaveCashflowRunRequest":
+        data = _mapping(payload, "request")
+        name = data.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise RequestValidationError("name is required.")
+        if len(name.strip()) > 200:
+            raise RequestValidationError("name must be 200 characters or fewer.")
+        notes = data.get("notes")
+        if notes is not None and not isinstance(notes, str):
+            raise RequestValidationError("notes must be text.")
+        return cls(
+            name=name.strip(),
+            notes=notes.strip() if notes and notes.strip() else None,
+            scenario=CashflowProjectionRequest.from_mapping(_mapping(data.get("scenario"), "scenario")),
+        )
