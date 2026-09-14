@@ -51,6 +51,30 @@ WHERE vehicle_id = %s AND cost_category = 'repair'
 ORDER BY occurred_on DESC, id DESC
 LIMIT %s
 """
+LIST_COST_EVENTS = """
+SELECT id, vehicle_id, occurred_on, cost_category, service_type, description,
+       amount, odometer, notes, created_at
+FROM vehicle_cost_events
+WHERE vehicle_id = %s
+ORDER BY occurred_on DESC, created_at DESC, id DESC
+"""
+UPDATE_VEHICLE = """
+UPDATE vehicles
+SET name = %s, make = %s, model = %s, year = %s,
+    acquired_on = %s, starting_odometer = %s
+WHERE id = %s
+"""
+UPDATE_COST_EVENT = """
+UPDATE vehicle_cost_events
+SET occurred_on = %s, cost_category = %s, service_type = %s,
+    description = %s, amount = %s, odometer = %s, notes = %s
+WHERE id = %s AND vehicle_id = %s
+"""
+COUNT_COST_EVENTS = "SELECT COUNT(*) FROM vehicle_cost_events WHERE vehicle_id = %s"
+DELETE_COST_EVENT = "DELETE FROM vehicle_cost_events WHERE id = %s AND vehicle_id = %s"
+DELETE_VEHICLE = "DELETE FROM vehicles WHERE id = %s"
+LOCK_VEHICLE = "SELECT name FROM vehicles WHERE id = %s FOR UPDATE"
+DELETE_VEHICLE_COSTS = "DELETE FROM vehicle_cost_events WHERE vehicle_id = %s"
 
 
 def database_url() -> str:
@@ -194,5 +218,132 @@ def recent_repairs(vehicle_id: UUID, limit: int = 25, connection_factory: Callab
     try:
         cursor.execute(RECENT_REPAIRS, (vehicle_id, limit))
         return tuple({"Date": _value(row, "occurred_on", 0), "Repair": _value(row, "service_type", 1), "Description": _value(row, "description", 2), "Amount": as_money(_value(row, "amount", 3)), "Odometer": _value(row, "odometer", 4), "Notes": _value(row, "notes", 5)} for row in cursor.fetchall())
+    finally:
+        _close(connection, cursor)
+
+
+def list_cost_events(vehicle_id: UUID, connection_factory: Callable[[str], Any] = default_connection_factory) -> tuple[dict[str, Any], ...]:
+    """Return editable ownership-cost records for one vehicle."""
+    connection = connection_factory(database_url())
+    cursor = connection.cursor()
+    try:
+        cursor.execute(LIST_COST_EVENTS, (vehicle_id,))
+        return tuple({
+            "id": _value(row, "id", 0), "vehicle_id": _value(row, "vehicle_id", 1),
+            "occurred_on": _value(row, "occurred_on", 2), "category": _value(row, "cost_category", 3),
+            "service_type": _value(row, "service_type", 4), "description": _value(row, "description", 5),
+            "amount": as_money(_value(row, "amount", 6)), "odometer": _value(row, "odometer", 7),
+            "notes": _value(row, "notes", 8), "created_at": _value(row, "created_at", 9),
+        } for row in cursor.fetchall())
+    finally:
+        _close(connection, cursor)
+
+
+def update_vehicle(
+    vehicle_id: UUID, *, name: str, acquired_on, make: str | None = None,
+    model: str | None = None, year: int | None = None,
+    starting_odometer: Decimal | int | float | str | None = None,
+    connection_factory: Callable[[str], Any] = default_connection_factory,
+) -> None:
+    """Update descriptive vehicle fields without changing cost history."""
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError("Vehicle name is required.")
+    if year is not None and not 1886 <= int(year) <= 9999:
+        raise ValueError("Vehicle year must be realistic.")
+    if starting_odometer is not None and Decimal(str(starting_odometer)) < 0:
+        raise ValueError("Starting odometer cannot be negative.")
+    connection = connection_factory(database_url())
+    cursor = connection.cursor()
+    try:
+        cursor.execute(UPDATE_VEHICLE, (normalized_name, make or None, model or None, year, acquired_on, starting_odometer, vehicle_id))
+        if cursor.rowcount != 1:
+            raise ValueError("Vehicle no longer exists.")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        _close(connection, cursor)
+
+
+def update_cost_event(event: VehicleCostEvent, connection_factory: Callable[[str], Any] = default_connection_factory) -> None:
+    """Correct one existing ownership cost while preserving its identity."""
+    if event.id is None:
+        raise ValueError("An existing cost record ID is required.")
+    connection = connection_factory(database_url())
+    cursor = connection.cursor()
+    try:
+        cursor.execute(UPDATE_COST_EVENT, (
+            event.occurred_on, event.category, event.service_type.strip(), event.description or None,
+            event.amount, event.odometer, event.notes or None, event.id, event.vehicle_id,
+        ))
+        if cursor.rowcount != 1:
+            raise ValueError("Cost record no longer exists.")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        _close(connection, cursor)
+
+
+def delete_cost_event(vehicle_id: UUID, event_id: UUID, connection_factory: Callable[[str], Any] = default_connection_factory) -> None:
+    """Delete one explicitly selected ownership-cost record."""
+    connection = connection_factory(database_url())
+    cursor = connection.cursor()
+    try:
+        cursor.execute(DELETE_COST_EVENT, (event_id, vehicle_id))
+        if cursor.rowcount != 1:
+            raise ValueError("Cost record no longer exists.")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        _close(connection, cursor)
+
+
+def delete_vehicle(vehicle_id: UUID, connection_factory: Callable[[str], Any] = default_connection_factory) -> None:
+    """Delete an empty vehicle and block deletion when cost history exists."""
+    connection = connection_factory(database_url())
+    cursor = connection.cursor()
+    try:
+        cursor.execute(COUNT_COST_EVENTS, (vehicle_id,))
+        count = _value(cursor.fetchone(), "count", 0)
+        if count:
+            raise ValueError(f"Vehicle has {count} linked cost record(s). Delete them individually or use Delete All Vehicle Data.")
+        cursor.execute(DELETE_VEHICLE, (vehicle_id,))
+        if cursor.rowcount != 1:
+            raise ValueError("Vehicle no longer exists.")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        _close(connection, cursor)
+
+
+def delete_vehicle_and_costs(
+    vehicle_id: UUID, confirmation_name: str,
+    connection_factory: Callable[[str], Any] = default_connection_factory,
+) -> None:
+    """Delete a vehicle and its history only after exact-name confirmation."""
+    connection = connection_factory(database_url())
+    cursor = connection.cursor()
+    try:
+        cursor.execute(LOCK_VEHICLE, (vehicle_id,))
+        row = cursor.fetchone()
+        if row is None:
+            raise ValueError("Vehicle no longer exists.")
+        actual_name = _value(row, "name", 0)
+        if confirmation_name != actual_name:
+            raise ValueError(f'Type the vehicle name exactly: {actual_name}')
+        cursor.execute(DELETE_VEHICLE_COSTS, (vehicle_id,))
+        cursor.execute(DELETE_VEHICLE, (vehicle_id,))
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         _close(connection, cursor)
