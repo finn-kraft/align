@@ -70,7 +70,7 @@ def gas_server(input, output, session):
                 DATA_FILE,
                 REJECTED_FILE,
                 source_name=f'upload:{record["name"]}',
-                default_vehicle="Jetta",
+                default_vehicle="2012 Volkswagen Jetta 2.5L SE",
             )
         except Exception as error:
             import_status.set(f"Import failed: {error}")
@@ -97,7 +97,7 @@ def gas_server(input, output, session):
                     DATA_FILE,
                     REJECTED_FILE,
                     source_name="google-sheet:jetta",
-                    default_vehicle="Jetta",
+                    default_vehicle="2012 Volkswagen Jetta 2.5L SE",
                 )
                 if refreshed:
                     import_status.set("Prepared the latest gas source export.")

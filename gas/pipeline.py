@@ -43,8 +43,31 @@ class GasPipelineResult:
     quality_issues: tuple[GasQualityIssue, ...] = ()
 
 
+@dataclass(frozen=True)
+class GasVehicleProfile:
+    name: str
+    minimum_mpg: Decimal
+    maximum_mpg: Decimal
+
+
+JETTA_25_SE_PROFILE = GasVehicleProfile(
+    name="2012 Volkswagen Jetta 2.5L SE",
+    minimum_mpg=Decimal("18"),
+    maximum_mpg=Decimal("38"),
+)
+
+
+def vehicle_profile_for(vehicle: str | None) -> GasVehicleProfile | None:
+    """Resolve known vehicle-specific quality limits without guessing a trim."""
+
+    normalized = (vehicle or "").casefold().replace("-", " ")
+    required = ("2012", "jetta", "2.5")
+    return JETTA_25_SE_PROFILE if all(token in normalized for token in required) else None
+
+
 def build_gas_analytics(
-    rows: Iterable[Mapping[str, object]], *, source_name: str
+    rows: Iterable[Mapping[str, object]], *, source_name: str,
+    vehicle_profile: GasVehicleProfile | None = None,
 ) -> GasPipelineResult:
     """Validate observed purchases and calculate the existing dashboard metrics.
 
@@ -73,7 +96,7 @@ def build_gas_analytics(
         trip_mpg = miles / entry.gallons
         price_per_gallon = entry.total_cost / entry.gallons
         per_mile = entry.total_cost / miles
-        issues = _quality_issues(entry, miles, trip_mpg, price_per_gallon)
+        issues = _quality_issues(entry, miles, trip_mpg, price_per_gallon, vehicle_profile)
         quality_issues.extend(issues)
         reliable_efficiency = not any(issue.excludes_efficiency for issue in issues)
         reliable_cost = not any(issue.excludes_cost_per_mile for issue in issues)
@@ -93,11 +116,19 @@ def build_gas_analytics(
     return GasPipelineResult(tuple(analytics), tuple(rejected), tuple(quality_issues))
 
 
-def run_pipeline(input_path: Path, output_path: Path, rejected_path: Path, *, source_name: str, default_vehicle: str | None = None) -> GasPipelineResult:
+def run_pipeline(
+    input_path: Path, output_path: Path, rejected_path: Path, *,
+    source_name: str, default_vehicle: str | None = None,
+    vehicle_profile: GasVehicleProfile | None = None,
+) -> GasPipelineResult:
     """Run the CSV ingestion path with atomic derived-data writes."""
 
     source = read_gas_source_csv(input_path, default_vehicle=default_vehicle)
-    result = build_gas_analytics(source.rows, source_name=source_name)
+    result = build_gas_analytics(
+        source.rows,
+        source_name=source_name,
+        vehicle_profile=vehicle_profile or vehicle_profile_for(default_vehicle),
+    )
     _atomic_write_csv(output_path, ANALYTICS_FIELDS, result.analytics_rows)
     _atomic_write_csv(
         rejected_path,
@@ -154,7 +185,10 @@ def _analytics_row(entry: GasEntry, miles: Decimal, trip_mpg: Decimal, cleaned_m
     }
 
 
-def _quality_issues(entry: GasEntry, miles: Decimal, trip_mpg: Decimal, price_per_gallon: Decimal) -> list[GasQualityIssue]:
+def _quality_issues(
+    entry: GasEntry, miles: Decimal, trip_mpg: Decimal,
+    price_per_gallon: Decimal, vehicle_profile: GasVehicleProfile | None,
+) -> list[GasQualityIssue]:
     issues: list[GasQualityIssue] = []
     notes = (entry.notes or "").casefold()
     if "missing data" in notes or "missing fill" in notes:
@@ -167,8 +201,19 @@ def _quality_issues(entry: GasEntry, miles: Decimal, trip_mpg: Decimal, price_pe
         issues.append(GasQualityIssue(entry.source_row, "possible_partial_fill", "Fuel quantity is below 3 gallons.", True, False))
     if entry.gallons > Decimal("20") and not any(issue.code == "aggregated_fills" for issue in issues):
         issues.append(GasQualityIssue(entry.source_row, "large_fuel_quantity", "Fuel quantity exceeds 20 gallons and may aggregate fills."))
-    if trip_mpg < Decimal("15") or trip_mpg > Decimal("50"):
-        issues.append(GasQualityIssue(entry.source_row, "implausible_mpg", "Calculated MPG is outside the 15-50 review range.", True, True))
+    if vehicle_profile and not (
+        vehicle_profile.minimum_mpg <= trip_mpg <= vehicle_profile.maximum_mpg
+    ):
+        issues.append(GasQualityIssue(
+            entry.source_row,
+            "vehicle_mpg_outlier",
+            f"Calculated MPG is outside the {vehicle_profile.minimum_mpg}-"
+            f"{vehicle_profile.maximum_mpg} review range for {vehicle_profile.name}.",
+            True,
+            True,
+        ))
+    elif trip_mpg < Decimal("15") or trip_mpg > Decimal("50"):
+        issues.append(GasQualityIssue(entry.source_row, "implausible_mpg", "Calculated MPG is outside the generic 15-50 review range.", True, True))
     if price_per_gallon < Decimal("1.5") or price_per_gallon > Decimal("8"):
         issues.append(GasQualityIssue(entry.source_row, "implausible_price", "Calculated fuel price is outside the $1.50-$8.00 review range.", False, True))
     return issues
