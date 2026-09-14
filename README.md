@@ -30,10 +30,10 @@ the environment automatically if installation was incomplete.
 ./run                 # Start the Shiny app
 ./run test            # Run the Python test suite
 ./run doctor          # Verify package installation
-./run install         # Force a dependency reinstall
+./run install         # Force a dependency reinstall\n./run gas --input "/path/to/export.csv" --vehicle Jetta
 ```
 
-If creating `.venv` fails on Ubuntu/Debian, install the operating-system
+The gas import accepts Google Sheet CSV exports even when report/formula rows\nappear above the actual headers. It preserves physical source-row numbers,\nwrites dashboard data to `gas/data/processed_data.csv`, and records fatal\nrejects in `gas/data/rejected_rows.csv`. Questionable observations remain\nvisible with quality flags; unreliable MPG or cost-per-mile values are excluded\nfrom their respective summaries instead of being silently corrected.\n\nIf creating `.venv` fails on Ubuntu/Debian, install the operating-system
 package once with `sudo apt install python3-venv`, then run `./run` again.
 
 ## Database setup

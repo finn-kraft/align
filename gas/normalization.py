@@ -51,7 +51,7 @@ _ALIASES = {
     "total_cost": ("Total Cost", "total_cost", "Cost", "cost", "Amount", "amount"),
     "vehicle": ("Vehicle", "vehicle"),
     "station": ("Station", "station"),
-    "notes": ("Notes", "notes", "Description", "description"),
+    "notes": ("Notes", "notes", "Description", "description", "Trip Type", "trip_type"),
 }
 
 
@@ -70,8 +70,13 @@ def normalize_gas_rows(
     rejected: list[RejectedGasRow] = []
     fingerprints: set[str] = set()
 
-    for source_row, row in enumerate(rows, start=1):
+    for sequence, row in enumerate(rows, start=1):
         raw = dict(row)
+        raw_source_row = raw.pop("__source_row__", sequence)
+        try:
+            source_row = int(raw_source_row)
+        except (TypeError, ValueError) as error:
+            raise ValueError("source row marker must be an integer") from error
         try:
             occurred_at = _parse_datetime(_value(raw, "timestamp"))
             odometer = _positive_decimal(_value(raw, "odometer"), "odometer")

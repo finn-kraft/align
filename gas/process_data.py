@@ -26,9 +26,11 @@ def main() -> None:
         OUTPUT_FILE,
         REJECTED_FILE,
         source_name=os.environ.get("ALIGN_GAS_SOURCE_NAME", "google-sheet:jetta"),
+        default_vehicle=os.environ.get("ALIGN_GAS_VEHICLE", "Jetta"),
     )
     print(f"Saved {len(result.analytics_rows)} dashboard rows to {OUTPUT_FILE}")
     print(f"Saved {len(result.rejected_rows)} rejected source rows to {REJECTED_FILE}")
+    print(f"Flagged {len(result.quality_issues)} non-fatal quality issues in dashboard rows")
 
 
 if __name__ == "__main__":
