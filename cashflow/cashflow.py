@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+from cashflow.saved_run_repository import save_run
+from cashflow.saved_runs import build_saved_run_snapshot
 # ----------------------------
 # Constants
 # ----------------------------
@@ -96,6 +98,21 @@ def extract_month_inputs(input, key):
         "car_repair": safe_get("car_repair"),
         "other_amount": safe_get("other_amount"),
     }
+
+
+def collect_month_inputs(input, state):
+    """Collect editable values for persistence without changing forecast logic."""
+    collected = {}
+    for month in generate_month_sequence(state["start_month"], state["months"]):
+        key = month["key"]
+        values = extract_month_inputs(input, key)
+        input_id = f"other_label_{key}"
+        try:
+            values["other_label"] = input[input_id]() or ""
+        except Exception:
+            values["other_label"] = ""
+        collected[key] = values
+    return collected
 
 def compute_variable_expenses(data):
     return (
@@ -222,60 +239,59 @@ def read_save_file():
 
 def cashflow_ui():
     return ui.div(
-
         ui.h2("Cash Flow Simulator"),
-
+        ui.p(
+            "Model a future cash position, then save an immutable run when the "
+            "assumptions are ready to compare with actual results."
+        ),
         ui.layout_sidebar(
-
             ui.sidebar(
-                ui.h4("General Settings"),
-                ui.input_numeric("starting_cash", "Starting Cash", 0),
-                ui.input_numeric("months", "Number of Months", 12),
+                ui.h5("Model settings"),
+                ui.input_numeric("starting_cash", "Starting cash", 0),
+                ui.input_numeric("months", "Months to project", 12),
+                ui.input_select(
+                    "start_month",
+                    "Starting month",
+                    ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+                ),
+                ui.input_numeric("apy", "Savings APY (%)", 3.3),
                 ui.hr(),
-
-                ui.h4("Recurring Monthly Expenses"),
+                ui.h5("Recurring monthly expenses"),
                 ui.input_numeric("rent", "Rent", 750),
                 ui.input_numeric("food", "Food", 400),
                 ui.input_numeric("phone", "Phone", 13),
                 ui.input_numeric("internet", "Internet", 30),
-
-                ui.input_select(
-                    "start_month",
-                    "Starting Month",
-                    ["Jan","Feb","Mar","Apr","May","Jun",
-                     "Jul","Aug","Sep","Oct","Nov","Dec"]
-                ),
-
-                ui.input_numeric("apy", "Savings APY (%)", 3.3),
                 ui.hr(),
-
-                ui.input_action_button("run_sim", "Run Simulation"),
-                ui.input_action_button("save_btn", "Save Scenario"),
-                ui.input_action_button("load_btn", "Load Scenario"),
-                ui.output_text("save_status")
+                ui.h5("Projection actions"),
+                ui.input_action_button("run_sim", "Run projection", class_="btn-primary w-100"),
+                ui.hr(),
+                ui.h5("Save this run"),
+                ui.input_text("run_name", "Run name", placeholder="e.g., Conservative winter plan"),
+                ui.input_text_area("run_notes", "Notes (optional)", placeholder="What does this scenario represent?"),
+                ui.input_action_button("save_btn", "Save run", class_="btn-success w-100"),
+                ui.output_text("save_status"),
+                ui.hr(),
+                ui.input_action_button("load_btn", "Load local draft", class_="w-100"),
             ),
-
             ui.div(
                 ui.tags.details(
-                    ui.tags.summary(ui.strong("Monthly Inputs")),
-                    ui.div(
-                        {"style": "margin-top:10px;"},
-                        ui.output_ui("monthly_inputs")
-                    )
+                    {"open": "open"},
+                    ui.tags.summary(ui.strong("Monthly inputs")),
+                    ui.div({"class": "pt-3"}, ui.output_ui("monthly_inputs")),
                 ),
                 ui.tags.details(
-                    ui.tags.summary(ui.strong("Forecasts")),
+                    {"open": "open"},
+                    ui.tags.summary(ui.strong("Projection results")),
                     ui.div(
-                        {"style": "margin-top:10px;"},
-                        ui.output_ui("forecasts")
-                    )
+                        {"class": "pt-3"},
+                        ui.h4("Projection"),
+                        ui.output_table("projection_table"),
+                        ui.output_plot("balance_plot"),
+                    ),
                 ),
-                ui.hr(),
-                ui.h4("Projection"),
-                ui.output_table("projection_table"),
-                ui.output_plot("balance_plot"),
             ),
-        )
+        ),
     )
 
 # ----------------------------
@@ -376,16 +392,27 @@ def cashflow_server(input, output, session):
     @reactive.effect
     @reactive.event(input.save_btn)
     def save_scenario():
-
         state = build_simulation_state(input)
+        monthly_inputs = collect_month_inputs(input, state)
+        projection = run_projection(state, input)
 
-        data = {
-            **state,
-            "months_data": month_data.get(),
-        }
+        try:
+            snapshot = build_saved_run_snapshot(
+                name=input.run_name(),
+                notes=input.run_notes(),
+                state=state,
+                monthly_inputs=monthly_inputs,
+                projection=projection,
+            )
+            save_run(snapshot)
+        except (RuntimeError, ValueError) as error:
+            save_status_value.set(str(error))
+            return
+        except Exception:
+            save_status_value.set("Unable to save this run. The database was not changed.")
+            return
 
-        write_save_file(data)
-        save_status_value.set("Saved successfully.")
+        save_status_value.set(f"Saved run {snapshot.id}.")
 
     @reactive.effect
     @reactive.event(input.load_btn)
