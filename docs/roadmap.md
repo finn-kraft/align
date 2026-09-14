@@ -86,8 +86,9 @@ Status: **in progress**
 - [ ] Define a plugin-owned vehicle data model
 - [ ] Add vehicle, odometer, and ownership-event ingestion
 - [ ] Distinguish observed events from assumptions and forecasts
-- [ ] Add normalized maintenance, repair, insurance, registration, tire, and
+- [x] Add normalized maintenance, repair, insurance, registration, tire, and
       fuel history
+- [x] Add explicitly confirmed, database-audited vehicle and cost record editing/deletion
 
 ### Version 6 — Vehicle TCO
 

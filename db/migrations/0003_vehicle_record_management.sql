@@ -58,7 +58,6 @@ CREATE TRIGGER vehicle_cost_events_audit_update_delete
 AFTER UPDATE OR DELETE ON vehicle_cost_events
 FOR EACH ROW EXECUTE FUNCTION audit_vehicle_record_change();
 
-GRANT UPDATE, DELETE ON vehicles, vehicle_cost_events TO align_app;
-GRANT SELECT ON vehicle_record_audit TO align_app;
+-- Runtime grants are role-specific and are applied by migration 0004.
 
 COMMIT;
