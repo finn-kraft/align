@@ -8,7 +8,11 @@ import pandas as pd
 from shiny import reactive, render, ui
 
 from .vehicle_ownership import VehicleCostEvent
-from .vehicle_repository import create_vehicle, list_vehicles, maintenance_breakdown, ownership_summaries, recent_repairs, record_cost_event
+from .vehicle_repository import (
+    create_vehicle, delete_cost_event, delete_vehicle, delete_vehicle_and_costs,
+    list_cost_events, list_vehicles, maintenance_breakdown, ownership_summaries,
+    recent_repairs, record_cost_event, update_cost_event, update_vehicle,
+)
 
 
 COST_CATEGORIES = {
@@ -46,6 +50,7 @@ def asset_modeling_ui():
             ui.card(ui.card_header("Record an ownership cost"), ui.output_ui("vehicle_cost_form")),
         ),
         ui.card(ui.card_header("Total cost of ownership"), ui.output_table("ownership_summary")),
+        ui.card(ui.card_header("Edit or delete records"), ui.output_ui("record_management")),
         ui.layout_columns(
             ui.card(ui.card_header("Maintenance by service"), ui.output_table("maintenance_table")),
             ui.card(ui.card_header("Repairs"), ui.output_table("repairs_table")),
@@ -65,6 +70,22 @@ def asset_modeling_server(input, output, session):
             return list_vehicles()
         except RuntimeError as error:
             status.set(str(error))
+            return ()
+
+    def selected_managed_vehicle():
+        """Return the vehicle selected in the record-management panel."""
+        selected = input.manage_vehicle_id()
+        return next((vehicle for vehicle in vehicles() if str(vehicle.id) == str(selected)), None)
+
+    @reactive.calc
+    def managed_costs():
+        refresh.get()
+        vehicle = selected_managed_vehicle()
+        if vehicle is None:
+            return ()
+        try:
+            return list_cost_events(vehicle.id)
+        except Exception:
             return ()
         except Exception:
             status.set("Asset data could not be loaded. Confirm the approved migration has been applied.")
@@ -93,6 +114,63 @@ def asset_modeling_server(input, output, session):
             ),
             ui.input_text_area("vehicle_cost_notes", "Notes (optional)"),
             ui.input_action_button("save_vehicle_cost", "Record cost", class_="btn-success"),
+        )
+
+    @output
+    @render.ui
+    def record_management():
+        available = vehicles()
+        if not available:
+            return ui.p("Add a vehicle before managing records.")
+        selected_id = str(input.manage_vehicle_id() or available[0].id)
+        vehicle = next((item for item in available if str(item.id) == selected_id), available[0])
+        costs = managed_costs() if str(vehicle.id) == selected_id else ()
+        selected_cost_id = str(input.manage_cost_id() or "")
+        selected_cost = next((item for item in costs if str(item["id"]) == selected_cost_id), costs[0] if costs else None)
+        cost_choices = {
+            str(item["id"]): f'{item["occurred_on"]} — {item["service_type"]} (${item["amount"]:,.2f})'
+            for item in costs
+        }
+        return ui.TagList(
+            ui.input_select("manage_vehicle_id", "Vehicle", choices={str(item.id): item.name for item in available}, selected=str(vehicle.id)),
+            ui.h5("Vehicle details"),
+            ui.layout_columns(
+                ui.input_text("edit_vehicle_name", "Vehicle name", value=vehicle.name),
+                ui.input_text("edit_vehicle_make", "Make", value=vehicle.make or ""),
+                ui.input_text("edit_vehicle_model", "Model", value=vehicle.model or ""),
+                ui.input_numeric("edit_vehicle_year", "Year", value=vehicle.year, min=1886, max=9999),
+            ),
+            ui.layout_columns(
+                ui.input_date("edit_vehicle_acquired_on", "Acquired on", value=vehicle.acquired_on.isoformat()),
+                ui.input_numeric("edit_vehicle_starting_odometer", "Starting odometer", value=float(vehicle.starting_odometer) if vehicle.starting_odometer is not None else None, min=0),
+            ),
+            ui.input_action_button("update_vehicle", "Save vehicle changes", class_="btn-primary"),
+            ui.input_checkbox("confirm_delete_vehicle", "Confirm deletion of this empty vehicle", value=False),
+            ui.input_action_button("delete_vehicle", "Delete empty vehicle", class_="btn-outline-danger ms-2"),
+            ui.hr(),
+            ui.h5("Delete all vehicle data"),
+            ui.p("This permanently removes the vehicle and every linked ownership cost."),
+            ui.input_text("delete_all_confirmation", f'Type “{vehicle.name}” to confirm'),
+            ui.input_action_button("delete_all_vehicle_data", "Delete all vehicle data", class_="btn-danger"),
+            ui.hr(),
+            ui.h5("Ownership cost records"),
+            ui.p("No cost records exist for this vehicle.") if selected_cost is None else ui.TagList(
+                ui.input_select("manage_cost_id", "Cost record", choices=cost_choices, selected=str(selected_cost["id"])),
+                ui.layout_columns(
+                    ui.input_date("edit_cost_date", "Date", value=selected_cost["occurred_on"].isoformat()),
+                    ui.input_select("edit_cost_category", "Category", choices=COST_CATEGORIES, selected=selected_cost["category"]),
+                    ui.input_text("edit_cost_service", "Service or cost type", value=selected_cost["service_type"]),
+                    ui.input_numeric("edit_cost_amount", "Amount", value=float(selected_cost["amount"]), min=0),
+                ),
+                ui.input_text_area("edit_cost_description", "Description", value=selected_cost["description"] or ""),
+                ui.layout_columns(
+                    ui.input_numeric("edit_cost_odometer", "Odometer", value=float(selected_cost["odometer"]) if selected_cost["odometer"] is not None else None, min=0),
+                    ui.input_text_area("edit_cost_notes", "Notes", value=selected_cost["notes"] or ""),
+                ),
+                ui.input_action_button("update_cost", "Save cost changes", class_="btn-primary"),
+                ui.input_checkbox("confirm_delete_cost", "Confirm deletion of this cost record", value=False),
+                ui.input_action_button("delete_cost", "Delete cost record", class_="btn-outline-danger ms-2"),
+            ),
         )
 
     @reactive.effect
@@ -146,6 +224,101 @@ def asset_modeling_server(input, output, session):
             return
         refresh.set(refresh.get() + 1)
         status.set(f"Recorded {event.service_type} under {event.category}.")
+
+    @reactive.effect
+    @reactive.event(input.update_vehicle)
+    def update_selected_vehicle():
+        vehicle = selected_managed_vehicle()
+        if vehicle is None:
+            return
+        try:
+            year = input.edit_vehicle_year()
+            update_vehicle(
+                vehicle.id, name=input.edit_vehicle_name(), make=input.edit_vehicle_make(),
+                model=input.edit_vehicle_model(), year=int(year) if year is not None else None,
+                acquired_on=date.fromisoformat(str(input.edit_vehicle_acquired_on())),
+                starting_odometer=input.edit_vehicle_starting_odometer(),
+            )
+        except Exception as error:
+            ui.notification_show(str(error), type="error", duration=8)
+            return
+        refresh.set(refresh.get() + 1)
+        ui.notification_show("Vehicle changes saved.", type="message", duration=5)
+
+    @reactive.effect
+    @reactive.event(input.delete_vehicle)
+    def delete_empty_vehicle():
+        vehicle = selected_managed_vehicle()
+        if vehicle is None:
+            return
+        if not input.confirm_delete_vehicle():
+            ui.notification_show("Confirm deletion before deleting the vehicle.", type="warning", duration=6)
+            return
+        try:
+            delete_vehicle(vehicle.id)
+        except Exception as error:
+            ui.notification_show(str(error), type="error", duration=10)
+            return
+        refresh.set(refresh.get() + 1)
+        ui.notification_show("Vehicle deleted.", type="message", duration=5)
+
+    @reactive.effect
+    @reactive.event(input.delete_all_vehicle_data)
+    def delete_all_selected_vehicle_data():
+        vehicle = selected_managed_vehicle()
+        if vehicle is None:
+            return
+        try:
+            delete_vehicle_and_costs(vehicle.id, input.delete_all_confirmation())
+        except Exception as error:
+            ui.notification_show(str(error), type="error", duration=10)
+            return
+        refresh.set(refresh.get() + 1)
+        ui.notification_show("Vehicle and all linked ownership costs were deleted.", type="message", duration=8)
+
+    def selected_managed_cost():
+        selected = input.manage_cost_id()
+        return next((item for item in managed_costs() if str(item["id"]) == str(selected)), None)
+
+    @reactive.effect
+    @reactive.event(input.update_cost)
+    def update_selected_cost():
+        existing = selected_managed_cost()
+        if existing is None:
+            return
+        try:
+            event = VehicleCostEvent(
+                id=existing["id"], vehicle_id=existing["vehicle_id"],
+                occurred_on=date.fromisoformat(str(input.edit_cost_date())),
+                category=input.edit_cost_category(), service_type=input.edit_cost_service(),
+                amount=Decimal(str(input.edit_cost_amount() or 0)),
+                description=input.edit_cost_description(),
+                odometer=Decimal(str(input.edit_cost_odometer())) if input.edit_cost_odometer() is not None else None,
+                notes=input.edit_cost_notes(),
+            )
+            update_cost_event(event)
+        except Exception as error:
+            ui.notification_show(str(error), type="error", duration=8)
+            return
+        refresh.set(refresh.get() + 1)
+        ui.notification_show("Cost record changes saved.", type="message", duration=5)
+
+    @reactive.effect
+    @reactive.event(input.delete_cost)
+    def delete_selected_cost():
+        existing = selected_managed_cost()
+        if existing is None:
+            return
+        if not input.confirm_delete_cost():
+            ui.notification_show("Confirm deletion before deleting the cost record.", type="warning", duration=6)
+            return
+        try:
+            delete_cost_event(existing["vehicle_id"], existing["id"])
+        except Exception as error:
+            ui.notification_show(str(error), type="error", duration=8)
+            return
+        refresh.set(refresh.get() + 1)
+        ui.notification_show("Cost record deleted.", type="message", duration=5)
 
     @output
     @render.table

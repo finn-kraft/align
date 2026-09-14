@@ -33,7 +33,10 @@ the environment automatically if installation was incomplete.
 ./run install         # Force a dependency reinstall
 ```
 
+If creating `.venv` fails on Ubuntu/Debian, install the operating-system
+package once with `sudo apt install python3-venv`, then run `./run` again.
 
+## Database setup
 
 `ALIGN_DATABASE_URL` must be supplied outside source control and use a
 dedicated least-privilege application role. The application never runs
@@ -42,10 +45,13 @@ migrations. Review and apply them with a separate migration role:
 ```bash
 psql "$ALIGN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0001_create_cashflow_saved_runs.sql
 psql "$ALIGN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0002_create_vehicle_ownership.sql
+psql "$ALIGN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0003_vehicle_record_management.sql
 ```
 
-The runtime role needs only `SELECT, INSERT` on the saved-run and vehicle
-ownership tables. It must not be a superuser, owner, or migration role.
+The runtime role uses `SELECT, INSERT` for normal operation. Migration 0003
+adds narrowly scoped `UPDATE, DELETE` rights for vehicle records and installs
+database-enforced edit/delete auditing. It must not be a superuser, owner, or
+migration role.
 
 See [Vehicle Ownership Tracking](docs/vehicle-ownership.md) for what to record
 and how each category contributes to total cost of ownership.
@@ -56,7 +62,6 @@ and how each category contributes to total cost of ownership.
 - `cashflow/` — cash-flow projection and saved-run code
 - `assets/` — vehicle ownership models, persistence, and Shiny UI
 - `gas/` — legacy Google Sheet ingestion and gas analytics
-- `vehicles/` — deterministic ownership-cost/TCO domain model
 - `db/migrations/` — reviewed, unapplied PostgreSQL migrations
 - `tests/` — Python unit tests
 - `docs/` — architecture and feature documentation

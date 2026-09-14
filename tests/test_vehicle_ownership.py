@@ -5,7 +5,10 @@ import unittest
 from uuid import UUID
 
 from assets.vehicle_ownership import VehicleCostEvent, as_money
-from assets.vehicle_repository import create_vehicle, list_vehicles, record_cost_event
+from assets.vehicle_repository import (
+    create_vehicle, delete_cost_event, delete_vehicle, delete_vehicle_and_costs,
+    list_vehicles, record_cost_event, update_cost_event, update_vehicle,
+)
 
 
 class FakeCursor:
@@ -13,6 +16,7 @@ class FakeCursor:
         self.calls = []
         self.closed = False
         self.rows = rows
+        self.rowcount = 1
 
     def execute(self, sql, parameters=None):
         self.calls.append((sql, parameters))
@@ -22,6 +26,9 @@ class FakeCursor:
 
     def fetchall(self):
         return self.rows
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
 
 
 class FakeConnection:
@@ -91,6 +98,52 @@ class VehicleOwnershipTests(unittest.TestCase):
         self.assertEqual("maintenance", params[3])
         self.assertEqual("Oil change", params[4])
         self.assertEqual(Decimal("54.95"), params[6])
+
+    def test_vehicle_and_cost_records_can_be_updated(self):
+        vehicle_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        vehicle_connection = FakeConnection()
+        update_vehicle(
+            vehicle_id, name="2014 Jetta", make="Volkswagen", model="Jetta",
+            year=2014, acquired_on=date(2020, 1, 1), starting_odometer="90000",
+            connection_factory=lambda url: vehicle_connection,
+        )
+        self.assertTrue(vehicle_connection.committed)
+
+        cost_connection = FakeConnection()
+        event = VehicleCostEvent(
+            vehicle_id, date(2026, 2, 1), "maintenance", "Oil change", "64.95",
+            id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        )
+        update_cost_event(event, connection_factory=lambda url: cost_connection)
+        self.assertTrue(cost_connection.committed)
+
+    def test_normal_vehicle_delete_is_blocked_when_costs_exist(self):
+        connection = FakeConnection(rows=[(2,)])
+        with self.assertRaisesRegex(ValueError, "2 linked cost"):
+            delete_vehicle(UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), connection_factory=lambda url: connection)
+        self.assertTrue(connection.rolled_back)
+        self.assertEqual(1, len(connection.cursor_instance.calls))
+
+    def test_delete_all_requires_exact_vehicle_name(self):
+        vehicle_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        rejected = FakeConnection(rows=[("Jetta",)])
+        with self.assertRaisesRegex(ValueError, "Type the vehicle name exactly"):
+            delete_vehicle_and_costs(vehicle_id, "jetta", connection_factory=lambda url: rejected)
+        self.assertTrue(rejected.rolled_back)
+
+        accepted = FakeConnection(rows=[("Jetta",)])
+        delete_vehicle_and_costs(vehicle_id, "Jetta", connection_factory=lambda url: accepted)
+        self.assertTrue(accepted.committed)
+        self.assertEqual(3, len(accepted.cursor_instance.calls))
+
+    def test_individual_cost_record_can_be_deleted(self):
+        connection = FakeConnection()
+        delete_cost_event(
+            UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            connection_factory=lambda url: connection,
+        )
+        self.assertTrue(connection.committed)
 
 
 if __name__ == "__main__":

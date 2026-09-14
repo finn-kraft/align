@@ -12,14 +12,16 @@ total cost of ownership from real events rather than a generic estimate.
 | Fuel | fuel purchases not yet imported from the gas workflow | separate total-cost category |
 | Other | parking, tolls, accessories | separate total-cost category |
 
-Every cost is append-only. If an entry is wrong, record a correcting entry for
-now; editing/deleting history is deferred until an audited review workflow
-exists.
+Vehicle and cost records can be corrected or deleted. PostgreSQL records the
+previous row in `vehicle_record_audit` for every update or deletion. Normal
+vehicle deletion is blocked while costs exist; **Delete All Vehicle Data**
+requires typing the vehicle name exactly and removes the vehicle and costs in
+one transaction.
 
 ## First-time setup
 
 1. Apply `db/migrations/0002_create_vehicle_ownership.sql` with the migration role.
-2. Give the runtime Align role `SELECT, INSERT` on `vehicles` and `vehicle_cost_events`.
+2. Apply `db/migrations/0003_vehicle_record_management.sql` to enable audited record management.
 3. Set `ALIGN_DATABASE_URL` outside the repository, run `./run`, add a vehicle, and record costs.
 
 The application never runs migrations and does not need a superuser or owner credential.
