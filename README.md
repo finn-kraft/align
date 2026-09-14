@@ -1,26 +1,20 @@
 # Align
 
 Align is a data-driven personal financial modeling and decision-support
-application. It currently provides a Shiny cash-flow simulator and gas
-analytics while the project incrementally builds a React + TypeScript and
-FastAPI architecture around the same deterministic Python financial models.
+application. It currently provides a Shiny cash-flow simulator, gas analytics,
+and a vehicle total-cost-of-ownership tracker.
 
 ## Current implementation
 
 - Shiny remains the working application entry point
-- Cash-flow projection logic is framework-independent Python with regression
-  tests
-- Cash-flow scenarios can be explicitly saved as immutable PostgreSQL model
-  snapshots when `ALIGN_DATABASE_URL` is configured and the reviewed migration
-  has been applied
-- The backend core contains validated request contracts and services ready for
-  a FastAPI transport layer
+- Cash-flow scenarios can be saved as immutable PostgreSQL model snapshots
+- Asset Modeling tracks vehicles and separately records purchase, maintenance,
+  repairs, administrative costs, fuel, and other ownership costs
+- Individual maintenance services such as oil changes and tires are grouped;
+  repairs stay separate for clear review
 - Google Sheets remains an input source for gas data; it is not canonical data
 
-React, a running FastAPI transport, vehicle ingestion, and TCO features are
-planned work. See [docs/roadmap.md](docs/roadmap.md) for actual status.
-
-## Quick start
+## Start Align
 
 ```bash
 git clone <repository-url>
@@ -28,50 +22,41 @@ cd align
 ./run
 ```
 
-The launcher creates `.venv`, installs the dependencies when `requirements.txt`
-changes, and starts Shiny. Shell activation is not required.
-
-Run the test suite with:
-
-```bash
-./run test
-```
-
-Process the current Google Sheet export after it has been retrieved into
-`gas/data/live_data.csv` with:
+You should not need to activate a virtual environment or run `pip install`
+yourself. `./run` creates `.venv`, verifies its packages every time, and repairs
+the environment automatically if installation was incomplete.
 
 ```bash
-./run gas
+./run                 # Start the Shiny app
+./run test            # Run the Python test suite
+./run doctor          # Verify package installation
+./run install         # Force a dependency reinstall
 ```
 
-This writes derived dashboard data and an auditable rejected-row report under
-`gas/data/`; it never modifies the source export.
 
-## Configuration and secrets
 
-`ALIGN_DATABASE_URL` is the only database connection setting. It must contain
-the credentials for a dedicated least-privilege application role; never put it
-in source control. The saved-run migration is in
-`db/migrations/0001_create_cashflow_saved_runs.sql` and is never run by the
-application or launcher.
+`ALIGN_DATABASE_URL` must be supplied outside source control and use a
+dedicated least-privilege application role. The application never runs
+migrations. Review and apply them with a separate migration role:
 
-Google OAuth credentials and tokens belong in `gas/.env/`, which is ignored by
-Git. See the gas ingestion code before configuring a Sheet source.
+```bash
+psql "$ALIGN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0001_create_cashflow_saved_runs.sql
+psql "$ALIGN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/migrations/0002_create_vehicle_ownership.sql
+```
+
+The runtime role needs only `SELECT, INSERT` on the saved-run and vehicle
+ownership tables. It must not be a superuser, owner, or migration role.
+
+See [Vehicle Ownership Tracking](docs/vehicle-ownership.md) for what to record
+and how each category contributes to total cost of ownership.
 
 ## Layout
 
 - `app.py` — current Shiny application entry point
-- `cashflow/` — deterministic projection, saved-run, and Shiny adapter code
-- `backend/` — framework-independent API contracts and application services
+- `cashflow/` — cash-flow projection and saved-run code
+- `assets/` — vehicle ownership models, persistence, and Shiny UI
 - `gas/` — legacy Google Sheet ingestion and gas analytics
 - `vehicles/` — deterministic ownership-cost/TCO domain model
 - `db/migrations/` — reviewed, unapplied PostgreSQL migrations
 - `tests/` — Python unit tests
-- `docs/` — architecture, canonical model, and migration roadmap
-
-## Development notes
-
-Python owns calculations, validation, normalization, and persistence rules.
-React will own presentation and interaction as pages are migrated. Financial
-categories remain data, not database columns; cash-flow scenarios are model
-runs, not canonical ledger transactions.
+- `docs/` — architecture and feature documentation

@@ -5,43 +5,51 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$ROOT_DIR/.venv"
 REQUIREMENTS_FILE="$ROOT_DIR/requirements.txt"
 STAMP_FILE="$VENV_DIR/.align-requirements.sha256"
+MODE="${1:-shiny}"
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "Align requires python3 to create its local environment." >&2
+  echo "Align requires python3." >&2
   exit 1
 fi
-
 if [ ! -d "$VENV_DIR" ]; then
   echo "Creating $VENV_DIR..."
-  python3 -m venv "$VENV_DIR"
-fi
-
-if ! command -v sha256sum >/dev/null 2>&1; then
-  echo "Align requires sha256sum to track installed dependencies." >&2
-  exit 1
+  python3 -m venv "$VENV_DIR" || {
+    echo "Could not create a virtual environment. On Ubuntu/Debian run: sudo apt install python3-venv" >&2
+    exit 1
+  }
 fi
 
 REQUIREMENTS_HASH="$(sha256sum "$REQUIREMENTS_FILE" | awk '{print $1}')"
-if [ ! -f "$STAMP_FILE" ] || [ "$(cat "$STAMP_FILE")" != "$REQUIREMENTS_HASH" ]; then
-  echo "Installing Align dependencies..."
+dependencies_healthy() {
+  "$VENV_DIR/bin/python" -m pip check >/dev/null 2>&1 || return 1
+  "$VENV_DIR/bin/python" - <<'PY' >/dev/null 2>&1
+import fastapi, googleapiclient, google.auth, google_auth_oauthlib
+import matplotlib, numpy, pandas, plotly, psycopg, shiny, shinywidgets, uvicorn
+PY
+}
+install_dependencies() {
+  echo "Installing Align dependencies from requirements.txt..."
   "$VENV_DIR/bin/python" -m pip install --upgrade pip
   "$VENV_DIR/bin/python" -m pip install -r "$REQUIREMENTS_FILE"
   printf '%s\n' "$REQUIREMENTS_HASH" > "$STAMP_FILE"
+}
+if [ "$MODE" = "install" ] || [ ! -f "$STAMP_FILE" ] || [ "$(cat "$STAMP_FILE")" != "$REQUIREMENTS_HASH" ] || ! dependencies_healthy; then
+  install_dependencies
 fi
 
-MODE="${1:-shiny}"
 case "$MODE" in
-  shiny)
-    exec "$VENV_DIR/bin/shiny" run --reload "$ROOT_DIR/app.py"
-    ;;
-  test)
-    exec "$VENV_DIR/bin/python" -m unittest discover -s "$ROOT_DIR/tests" -v
+  shiny) exec "$VENV_DIR/bin/shiny" run --reload "$ROOT_DIR/app.py" ;;
+  test) exec "$VENV_DIR/bin/python" -m unittest discover -s "$ROOT_DIR/tests" -v ;;
+  install) echo "Align dependencies are ready in $VENV_DIR." ;;
+  doctor)
+    "$VENV_DIR/bin/python" -m pip check
+    "$VENV_DIR/bin/python" -c 'import shiny, psycopg; print("Align environment is ready.")'
     ;;
   gas)
     exec "$VENV_DIR/bin/python" -m gas.process_data
     ;;
   *)
-    echo "Usage: $0 [shiny|test|gas]" >&2
+
     exit 2
     ;;
 esac
