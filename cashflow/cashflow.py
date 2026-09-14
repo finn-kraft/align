@@ -5,8 +5,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import json
 from pathlib import Path
-from datetime import datetime
-
+from cashflow.projection import generate_month_sequence, run_projection as calculate_projection
 from cashflow.saved_run_repository import save_run
 from cashflow.saved_runs import build_saved_run_snapshot
 # ----------------------------
@@ -23,40 +22,6 @@ SAVE_FILE = SAVE_DIR / "cash_simulator_save.json"
 # Core Simulation Logic
 # ----------------------------
 
-def generate_month_sequence(start_month_name, count, start_year=None):
-
-    MONTHS = ["Jan","Feb","Mar","Apr","May","Jun",
-              "Jul","Aug","Sep","Oct","Nov","Dec"]
-
-    # --- Guard against None ---
-    if count is None:
-        count = 12
-
-    if start_month_name is None:
-        start_month_name = "Jan"
-
-    if start_year is None:
-        start_year = datetime.now().year
-
-    start_index = MONTHS.index(start_month_name)
-
-    months = []
-    year = start_year
-    month_index = start_index
-
-    for _ in range(count):
-        label = f"{MONTHS[month_index]} {year}"
-        key = f"{year}_{month_index+1:02d}"
-
-        months.append({"label": label, "key": key})
-
-        month_index += 1
-        if month_index > 11:
-            month_index = 0
-            year += 1
-
-    return months
-
 def build_simulation_state(input):
     return {
         "months": input.months(),
@@ -72,18 +37,13 @@ def build_simulation_state(input):
     }
 
 
-def compute_recurring_total(recurring):
-    return sum(recurring.values())
-
-
 def extract_month_inputs(input, key):
-
     def safe_get(field):
         input_id = f"{field}_{key}"
         try:
-            val = input[input_id]()
-            return val if val is not None else 0
-        except:
+            value = input[input_id]()
+            return value if value is not None else 0
+        except Exception:
             return 0
 
     return {
@@ -114,73 +74,14 @@ def collect_month_inputs(input, state):
         collected[key] = values
     return collected
 
-def compute_variable_expenses(data):
-    return (
-        data["insurance"] +
-        data["utilities"] +
-        data["gas"] +
-        data["clothing"] +
-        data["fun"] +
-        data["eating_out"] +
-        data["giving"] +
-        data["car_repair"] +
-        data["other_amount"]
-    )
-
-
-def project_month(balance, income, recurring_total, variable_expenses, monthly_rate):
-
-    interest_income = balance * monthly_rate
-    net = income + interest_income - recurring_total - variable_expenses
-    new_balance = balance + net
-
-    return {
-        "interest_income": interest_income,
-        "net": net,
-        "new_balance": new_balance
-    }
-
 
 def run_projection(state, input):
-
-    months = state["months"]
-    start_month = state["start_month"]
-    starting_cash = state["starting_cash"]
-    recurring_total = compute_recurring_total(state["recurring"])
-    monthly_rate = state["apy"] / 100 / 12
-
-    month_sequence = generate_month_sequence(start_month, months)
-    balance = starting_cash
-    results = []
-
-    for month in month_sequence:
-        key = month["key"]
-        label = month["label"]
-
-        data = extract_month_inputs(input, key)
-        variable = compute_variable_expenses(data)
-
-        projection = project_month(
-            balance,
-            data["income"],
-            recurring_total,
-            variable,
-            monthly_rate
-        )
-
-        balance = projection["new_balance"]
-
-        results.append({
-            "Month": label,
-            "Income": data["income"],
-            "Interest Earned": round(projection["interest_income"], 2),
-            "Recurring": recurring_total,
-            "Variable": variable,
-            "Net Change": round(projection["net"], 2),
-            "Ending Balance": round(balance, 2),
-        })
-
-    return results
+    """Adapt current Shiny inputs to the framework-independent projection."""
+    monthly_inputs = {
+        month["key"]: extract_month_inputs(input, month["key"])
+        for month in generate_month_sequence(state["start_month"], state["months"])
+    }
+    return calculate_projection(state, monthly_inputs)
 
 
 def default_month_data():
