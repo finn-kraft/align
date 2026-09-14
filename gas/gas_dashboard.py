@@ -189,7 +189,7 @@ def gas_server(input, output, session):
         med = monthly["TotalSpent"].median()
         std = monthly["TotalSpent"].std()
 
-        return f"Median Monthly: ${med:,.2f} | Std: ${std:,.2f}"
+        return f"Median Monthly: ${med:,.0f} | Std: ${std:,.0f}"
 
     # -------- Plot 1 --------
     @output
@@ -269,8 +269,10 @@ def gas_server(input, output, session):
         fig.add_trace(go.Bar(
             x=monthly["Date"],
             y=monthly["Total Cost"],
-            name="Monthly Spend"
+            name="Monthly Spend",
+            hovertemplate="%{x|%b %Y}<br>$%{y:,.0f}<extra></extra>",
         ))
+        fig.update_yaxes(tickprefix="$", tickformat=",.0f")
         return fig
 
     # -------- Table --------
