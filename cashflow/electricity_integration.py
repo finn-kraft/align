@@ -1,9 +1,4 @@
-"""Cash-flow integration for the electricity forecasting engine.
-
-The forecaster returns billing-period rows with a Predicted Bill column.
-This adapter converts those rows into the existing cash-flow contract:
-monthly input dictionaries with a utilities value.
-"""
+"""Cash-flow integration for the electricity forecasting engine."""
 
 from __future__ import annotations
 
@@ -13,15 +8,15 @@ from typing import Any, Iterable, Mapping
 
 import pandas as pd
 
+# These are the complete-history means from the supplied temps.csv.
+AVERAGE_TMAX_F = 61.262754
+AVERAGE_TMIN_F = 40.304829
+
 
 def forecast_to_cashflow_months(
     forecast_rows: Iterable[Mapping[str, Any]] | pd.DataFrame,
 ) -> dict[str, dict[str, float]]:
-    """Map forecast billing rows into the cash-flow model's monthly inputs.
-
-    Rows are grouped by calendar month. If more than one billing period
-    overlaps a month, the predicted bills are summed.
-    """
+    """Map forecast billing rows into the cash-flow model's monthly inputs."""
     frame = (
         forecast_rows.copy()
         if isinstance(forecast_rows, pd.DataFrame)
@@ -53,32 +48,63 @@ def merge_electricity_into_month_inputs(
     """Return monthly inputs with forecast electricity replacing utilities."""
     merged = {key: dict(values) for key, values in monthly_inputs.items()}
     for key, values in electricity_months.items():
-        if "utilities" not in values:
-            continue
-        merged.setdefault(key, {})["utilities"] = round(float(values["utilities"]), 2)
+        if "utilities" in values:
+            merged.setdefault(key, {})["utilities"] = round(float(values["utilities"]), 2)
     return merged
 
 
-def validate_electricity_inputs(
-    weather_path: str,
-    usage_path: str,
-    occupancy_path: str,
-    through: str,
-) -> tuple[Path, Path, Path, pd.Timestamp]:
-    """Validate dialog values before running the engine."""
-    paths = tuple(Path(value.strip()).expanduser() for value in
-                  (weather_path, usage_path, occupancy_path))
-    if any(not value for value in paths):
-        raise ValueError("Weather, usage, and occupancy files are required")
-    missing = [str(value) for value in paths if not value.is_file()]
-    if missing:
-        raise ValueError("Electricity input file not found: " + ", ".join(missing))
+def build_average_weather(start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    """Build a synthetic weather history from temps.csv's hardcoded means."""
+    dates = pd.date_range(pd.Timestamp(start).normalize(), pd.Timestamp(end).normalize(), freq="D")
+    return pd.DataFrame(
+        {
+            "Date": dates,
+            "TMAX (Degrees Fahrenheit)": AVERAGE_TMAX_F,
+            "TMIN (Degrees Fahrenheit)": AVERAGE_TMIN_F,
+        }
+    )
+
+
+def build_occupancy_schedule(
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    occupied_from: pd.Timestamp,
+    occupied_through: pd.Timestamp,
+) -> pd.DataFrame:
+    """Create daily occupancy values from the user's move-in date range."""
+    dates = pd.date_range(pd.Timestamp(start).normalize(), pd.Timestamp(end).normalize(), freq="D")
+    first = pd.Timestamp(occupied_from).normalize()
+    last = pd.Timestamp(occupied_through).normalize()
+    if last < first:
+        raise ValueError("Occupancy end date must be on or after the start date")
+    return pd.DataFrame({"Date": dates, "Occupied": dates.to_series().between(first, last).astype(int).to_numpy()})
+
+
+def uploaded_file_path(upload_value: Any) -> Path:
+    """Extract a path from Shiny's input_file result."""
+    if not upload_value:
+        raise ValueError("Upload usage.csv before forecasting")
+    item = upload_value[0] if isinstance(upload_value, list) else upload_value
+    path = item.get("datapath") if isinstance(item, dict) else getattr(item, "datapath", None)
+    if not path:
+        raise ValueError("The uploaded usage file could not be read")
+    result = Path(path)
+    if not result.is_file():
+        raise ValueError("The uploaded usage file is no longer available")
+    return result
+
+
+def validate_occupancy_dates(
+    occupied_from: Any,
+    occupied_through: Any,
+) -> tuple[pd.Timestamp, pd.Timestamp]:
     try:
-        end = pd.Timestamp(through)
+        first = pd.Timestamp(occupied_from)
+        last = pd.Timestamp(occupied_through)
     except (TypeError, ValueError) as error:
-        raise ValueError("Forecast through date must be a valid date") from error
-    if pd.isna(end):
-        raise ValueError("Forecast through date must be a valid date")
-    if end.date() < date.today():
-        raise ValueError("Forecast through date must be today or later")
-    return (*paths, end)
+        raise ValueError("Occupancy dates must be valid dates") from error
+    if pd.isna(first) or pd.isna(last):
+        raise ValueError("Occupancy start and end dates are required")
+    if last < first:
+        raise ValueError("Occupancy end date must be on or after the start date")
+    return first, last
