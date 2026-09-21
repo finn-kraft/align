@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from shiny import ui, reactive, render
+import pandas as pd
+from shiny import reactive, render, ui
 
 from cashflow.electricity_integration import (
+    build_average_weather,
+    build_occupancy_schedule,
     forecast_to_cashflow_months,
-    validate_electricity_inputs,
+    uploaded_file_path,
+    validate_occupancy_dates,
 )
 
 
@@ -16,13 +18,14 @@ def electricity_forecast_dialog_ui():
     return ui.div(
         ui.h4("Electricity forecast"),
         ui.p(
-            "Provide the three historical datasets used by the electricity engine. "
-            "The forecast will populate the Utilities field in matching cash-flow months."
+            "Upload historical usage, then enter the date range for which the home "
+            "will be occupied. Weather uses the average highs and lows from the "
+            "temperature history."
         ),
-        ui.input_text("electricity_weather_path", "Weather CSV path"),
-        ui.input_text("electricity_usage_path", "Billing-period usage CSV path"),
-        ui.input_text("electricity_occupancy_path", "Daily occupancy CSV path"),
-        ui.input_date("electricity_through", "Forecast through", value=None),
+        ui.input_file("electricity_usage_upload", "Upload usage.csv", accept=[".csv"]),
+        ui.input_date("electricity_occupied_from", "Occupancy start date"),
+        ui.input_date("electricity_occupied_through", "Occupancy end date"),
+        ui.input_date("electricity_through", "Forecast through"),
         ui.input_action_button(
             "electricity_forecast_btn",
             "Forecast electricity into cash flow",
@@ -33,20 +36,39 @@ def electricity_forecast_dialog_ui():
 
 
 def run_electricity_forecast(input):
-    """Run the existing engine and return its rows plus monthly cash-flow values."""
-    weather, usage, occupancy, through = validate_electricity_inputs(
-        input.electricity_weather_path(),
-        input.electricity_usage_path(),
-        input.electricity_occupancy_path(),
-        input.electricity_through(),
+    """Run the existing engine using the dialog's upload and dates."""
+    usage_path = uploaded_file_path(input.electricity_usage_upload())
+    occupied_from, occupied_through = validate_occupancy_dates(
+        input.electricity_occupied_from(),
+        input.electricity_occupied_through(),
     )
-    # The package is intentionally kept isolated from the cash-flow model.
+    through = pd.Timestamp(input.electricity_through())
+    usage = pd.read_csv(usage_path)
+    usage.columns = usage.columns.str.strip()
+    usage["Billing From"] = pd.to_datetime(usage["Billing From"])
+    usage["Billing To"] = pd.to_datetime(usage["Billing To"])
+    weather_start = min(usage["Billing From"].min(), occupied_from)
+    weather_end = max(usage["Billing To"].max(), through)
+    weather = build_average_weather(weather_start, weather_end)
+    occupancy = build_occupancy_schedule(
+        weather_start,
+        weather_end,
+        occupied_from,
+        occupied_through,
+    )
+
     from cashflow.forecasting_engines.electricity_forecast_package.electricity_forecast import (
         ElectricityForecaster,
     )
 
     forecaster = ElectricityForecaster()
-    rows = forecaster.fit(weather, usage, occupancy).forecast(through)
+    rows = forecaster.fit(weather, usage, occupancy).forecast(
+        through,
+        occupancy_fn=lambda current: int(
+            occupied_from.normalize() <= pd.Timestamp(current).normalize()
+            <= occupied_through.normalize()
+        ),
+    )
     return rows, forecast_to_cashflow_months(rows)
 
 
