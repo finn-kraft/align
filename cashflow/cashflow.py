@@ -10,6 +10,7 @@ from cashflow.projection import generate_month_sequence, run_projection as calcu
 from cashflow.saved_run_repository import save_run
 from cashflow.saved_runs import build_saved_run_snapshot
 from cashflow.electricity_dialog import electricity_forecast_dialog_ui, electricity_forecast_server
+from cashflow.electricity_integration import merge_electricity_into_month_inputs
 # ----------------------------
 # Constants
 # ----------------------------
@@ -247,7 +248,9 @@ def cashflow_server(input, output, session):
     @reactive.event(input.run_sim)
     def simulation():
         state = build_simulation_state(input)
-        projection = run_projection(state, input)
+        monthly_inputs = collect_month_inputs(input, state)
+        monthly_inputs = merge_electricity_into_month_inputs(monthly_inputs, electricity_months.get())
+        projection = calculate_projection(state, monthly_inputs)
         return pd.DataFrame(projection)
     
     @output
@@ -282,7 +285,9 @@ def cashflow_server(input, output, session):
     def save_scenario():
         state = build_simulation_state(input)
         monthly_inputs = collect_month_inputs(input, state)
-        projection = run_projection(state, input)
+        monthly_inputs = collect_month_inputs(input, state)
+        monthly_inputs = merge_electricity_into_month_inputs(monthly_inputs, electricity_months.get())
+        projection = calculate_projection(state, monthly_inputs)
 
         try:
             snapshot = build_saved_run_snapshot(
