@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pandas as pd
 from shiny import reactive, render, ui
 
@@ -11,6 +13,8 @@ from cashflow.electricity_integration import (
     uploaded_file_path,
     validate_occupancy_dates,
 )
+
+FORECAST_TIMEOUT_SECONDS = 45
 
 
 def electricity_forecast_dialog_ui():
@@ -36,23 +40,13 @@ def electricity_forecast_dialog_ui():
     )
 
 
-def _occupancy_ranges(input, periods):
-    ranges = []
-    for index, period in enumerate(periods, start=1):
-        start = period["start"]
-        end = period["end"]
-        if start is None or end is None:
-            start = input[f"electricity_occupied_from_{index}"]()
-            end = input[f"electricity_occupied_through_{index}"]()
-        ranges.append(validate_occupancy_dates(start, end))
-    return ranges
-
-
-def run_electricity_forecast(input, periods):
-    """Run the existing engine using the upload and all saved occupancy periods."""
-    usage_path = uploaded_file_path(input.electricity_usage_upload())
-    ranges = _occupancy_ranges(input, periods)
-    through = pd.Timestamp(input.electricity_through())
+def run_electricity_forecast(usage_path, through_value, periods):
+    """Run the existing engine without reading live Shiny inputs."""
+    ranges = [
+        validate_occupancy_dates(period["start"], period["end"])
+        for period in periods
+    ]
+    through = pd.Timestamp(through_value)
     if pd.isna(through):
         raise ValueError("Forecast through date is required")
 
@@ -66,7 +60,10 @@ def run_electricity_forecast(input, periods):
 
     occupancy = pd.DataFrame({"Date": weather["Date"], "Occupied": 0})
     for start, end in ranges:
-        occupancy.loc[occupancy["Date"].between(start.normalize(), end.normalize()), "Occupied"] = 1
+        occupancy.loc[
+            occupancy["Date"].between(start.normalize(), end.normalize()),
+            "Occupied",
+        ] = 1
 
     from cashflow.forecasting_engines.electricity_forecast_package.electricity_forecast import (
         ElectricityForecaster,
@@ -74,17 +71,20 @@ def run_electricity_forecast(input, periods):
 
     def occupancy_fn(current):
         current = pd.Timestamp(current).normalize()
-        return int(any(start.normalize() <= current <= end.normalize() for start, end in ranges))
+        return int(
+            any(start.normalize() <= current <= end.normalize() for start, end in ranges)
+        )
 
     rows = ElectricityForecaster().fit(weather, usage, occupancy).forecast(
         through,
+        scenarios=("normal",),
         occupancy_fn=occupancy_fn,
     )
     return rows, forecast_to_cashflow_months(rows)
 
 
 def electricity_forecast_server(input, output, on_forecast):
-    """Manage the occupancy modal and notify cash flow after a successful forecast."""
+    """Manage one modal instance and run forecasts without blocking the UI thread."""
     forecast_months = reactive.Value({})
     status_value = reactive.Value("")
     occupancy_periods = reactive.Value([{"start": None, "end": None}])
@@ -103,73 +103,108 @@ def electricity_forecast_server(input, output, on_forecast):
             captured.append({"start": start, "end": end})
         return captured
 
-    def show_occupancy_modal():
+    @output
+    @render.ui
+    def electricity_occupancy_period_editor():
         periods = occupancy_periods.get()
-        ui.modal_show(
-            ui.modal(
-                ui.h4("Occupancy periods"),
-                ui.p("Add every date range when the home will be occupied."),
-                *[
-                    ui.div(
-                        {"class": "border rounded p-2 mb-2"},
-                        ui.strong(f"Occupancy period {index}"),
-                        ui.input_date(
-                            f"electricity_occupied_from_{index}",
-                            "Start date",
-                            value=period["start"],
-                        ),
-                        ui.input_date(
-                            f"electricity_occupied_through_{index}",
-                            "End date",
-                            value=period["end"],
-                        ),
-                    )
-                    for index, period in enumerate(periods, start=1)
-                ],
-                ui.input_action_button(
-                    "electricity_add_occupancy",
-                    "Add new period",
-                    class_="btn-secondary",
-                ),
-                footer=ui.input_action_button(
-                    "electricity_save_occupancy",
-                    "Done",
-                    class_="btn-primary",
-                ),
-                easy_close=True,
-            )
+        return ui.TagList(
+            *[
+                ui.div(
+                    {"class": "border rounded p-2 mb-2"},
+                    ui.strong(f"Occupancy period {index}"),
+                    ui.input_date(
+                        f"electricity_occupied_from_{index}",
+                        "Start date",
+                        value=period["start"],
+                    ),
+                    ui.input_date(
+                        f"electricity_occupied_through_{index}",
+                        "End date",
+                        value=period["end"],
+                    ),
+                )
+                for index, period in enumerate(periods, start=1)
+            ]
         )
 
     @reactive.effect
     @reactive.event(input.electricity_manage_occupancy)
     def manage_occupancy():
-        show_occupancy_modal()
+        ui.modal_remove()
+        ui.modal_show(
+            ui.modal(
+                ui.p("Add every date range when the home will be occupied."),
+                ui.output_ui("electricity_occupancy_period_editor"),
+                ui.input_action_button(
+                    "electricity_add_occupancy",
+                    "Add new period",
+                    class_="btn-secondary",
+                ),
+                title="Occupancy periods",
+                footer=ui.input_action_button(
+                    "electricity_save_occupancy",
+                    "Done",
+                    class_="btn-primary",
+                ),
+                easy_close=False,
+            )
+        )
 
     @reactive.effect
     @reactive.event(input.electricity_add_occupancy)
     def add_occupancy_period():
         occupancy_periods.set(capture_periods() + [{"start": None, "end": None}])
-        show_occupancy_modal()
 
     @reactive.effect
     @reactive.event(input.electricity_save_occupancy)
     def save_occupancy_periods():
         periods = capture_periods()
-        for period in periods:
-            validate_occupancy_dates(period["start"], period["end"])
+        try:
+            for period in periods:
+                validate_occupancy_dates(period["start"], period["end"])
+        except ValueError as error:
+            ui.notification_show(str(error), type="error")
+            return
         occupancy_periods.set(periods)
         ui.modal_remove()
 
     @reactive.effect
     @reactive.event(input.electricity_forecast_btn)
-    def forecast():
+    async def forecast():
         try:
-            _, monthly = run_electricity_forecast(input, occupancy_periods.get())
-            on_forecast(monthly)
+            usage_path = uploaded_file_path(input.electricity_usage_upload())
+            through = input.electricity_through()
+            periods = [dict(period) for period in occupancy_periods.get()]
+            for period in periods:
+                validate_occupancy_dates(period["start"], period["end"])
         except Exception as error:
             forecast_months.set({})
             status_value.set(f"Forecast failed: {error}")
             return
+
+        status_value.set("Forecasting electricity usage...")
+        try:
+            _, monthly = await asyncio.wait_for(
+                asyncio.to_thread(
+                    run_electricity_forecast,
+                    usage_path,
+                    through,
+                    periods,
+                ),
+                timeout=FORECAST_TIMEOUT_SECONDS,
+            )
+            on_forecast(monthly)
+        except TimeoutError:
+            forecast_months.set({})
+            status_value.set(
+                "Forecast stopped after 45 seconds. Check the uploaded usage file and dates."
+            )
+            return
+        except Exception as error:
+            forecast_months.set({})
+            status_value.set(f"Forecast failed: {error}")
+            return
+
         forecast_months.set(monthly)
         status_value.set(
             f"Electricity forecast added to {len(monthly)} cash-flow month(s)."
@@ -177,7 +212,7 @@ def electricity_forecast_server(input, output, on_forecast):
 
     @output
     @render.text
-    def status():
+    def electricity_forecast_status():
         return status_value()
 
     return forecast_months
