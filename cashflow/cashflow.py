@@ -210,6 +210,25 @@ def cashflow_server(input, output, session):
     month_data = reactive.Value({})
 
     @reactive.effect
+    def apply_electricity_forecast_to_inputs():
+        """Copy forecast utilities into the rendered monthly input cards."""
+        forecast_months = electricity_months.get()
+        if not forecast_months:
+            return
+        updated = dict(month_data.get())
+        changed = False
+        for key, values in forecast_months.items():
+            if key not in updated:
+                continue
+            amount = values.get("utilities")
+            if amount is not None and updated[key].get("utilities") != amount:
+                updated[key] = dict(updated[key])
+                updated[key]["utilities"] = amount
+                changed = True
+        if changed:
+            month_data.set(updated)
+
+    @reactive.effect
     @reactive.event(input.start_month, input.months)
     def ensure_month_data():
         month_sequence = generate_month_sequence(input.start_month(), input.months())
