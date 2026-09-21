@@ -207,16 +207,23 @@ def cashflow_server(input, output, session):
     month_data = reactive.Value({})
 
     async def apply_electricity_forecast_to_inputs(forecast_months):
-        """Update both saved month state and the currently visible Utilities inputs."""
+        """Update each visible Utilities input and return the number applied."""
         active_keys = {
             month["key"]
             for month in generate_month_sequence(input.start_month(), input.months())
         }
+        applied = 0
         for key, values in forecast_months.items():
             if key not in active_keys or "utilities" not in values:
                 continue
             amount = round(float(values["utilities"]), 2)
-            await session.send_input_message(f"utilities_{key}", {"value": amount})
+            ui.update_numeric(
+                f"utilities_{key}",
+                value=amount,
+                session=session,
+            )
+            applied += 1
+        return applied
 
     electricity_months = electricity_forecast_server(
         input,
