@@ -130,6 +130,7 @@ def electricity_forecast_server(input, output, on_forecast):
     @reactive.effect
     @reactive.event(input.electricity_manage_occupancy)
     def manage_occupancy():
+        ui.modal_remove()
         ui.modal_show(
             ui.modal(
                 ui.p("Add every date range when the home will be occupied."),
@@ -158,8 +159,12 @@ def electricity_forecast_server(input, output, on_forecast):
     @reactive.event(input.electricity_save_occupancy)
     def save_occupancy_periods():
         periods = capture_periods()
-        for period in periods:
-            validate_occupancy_dates(period["start"], period["end"])
+        try:
+            for period in periods:
+                validate_occupancy_dates(period["start"], period["end"])
+        except ValueError as error:
+            ui.notification_show(str(error), type="error")
+            return
         occupancy_periods.set(periods)
         ui.modal_remove()
 
