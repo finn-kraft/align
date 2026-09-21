@@ -1,8 +1,8 @@
 import unittest
 
 from cashflow.electricity_integration import (
-    AVERAGE_TMAX_F,
-    AVERAGE_TMIN_F,
+    TMAX,
+    TMIN,
     build_average_weather,
     build_occupancy_schedule,
     validate_occupancy_dates,
@@ -10,11 +10,18 @@ from cashflow.electricity_integration import (
 
 
 class ElectricityInputTests(unittest.TestCase):
-    def test_weather_uses_hardcoded_temperature_means(self):
-        weather = build_average_weather("2026-01-01", "2026-01-03")
-        self.assertEqual(len(weather), 3)
-        self.assertTrue((weather["TMAX (Degrees Fahrenheit)"] == AVERAGE_TMAX_F).all())
-        self.assertTrue((weather["TMIN (Degrees Fahrenheit)"] == AVERAGE_TMIN_F).all())
+    def test_weather_uses_seasonal_calendar_day_climatology(self):
+        winter = build_average_weather("2026-01-15", "2026-01-15").iloc[0]
+        summer = build_average_weather("2026-07-15", "2026-07-15").iloc[0]
+        self.assertLess(winter[TMAX], summer[TMAX])
+        self.assertLess(winter[TMIN], summer[TMIN])
+        self.assertGreater(summer[TMAX] - winter[TMAX], 25)
+
+    def test_weather_repeats_profile_in_future_years(self):
+        first = build_average_weather("2026-04-15", "2026-04-15").iloc[0]
+        later = build_average_weather("2030-04-15", "2030-04-15").iloc[0]
+        self.assertEqual(first[TMAX], later[TMAX])
+        self.assertEqual(first[TMIN], later[TMIN])
 
     def test_occupancy_date_range(self):
         schedule = build_occupancy_schedule(

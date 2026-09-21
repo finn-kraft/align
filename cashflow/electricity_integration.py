@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 import pandas as pd
 
-# These are the complete-history means from the supplied temps.csv.
-AVERAGE_TMAX_F = 61.262754
-AVERAGE_TMIN_F = 40.304829
+TMAX = "TMAX (Degrees Fahrenheit)"
+TMIN = "TMIN (Degrees Fahrenheit)"
+CLIMATOLOGY_FILE = Path(__file__).with_name("electricity_climatology.csv")
 
 
 def forecast_to_cashflow_months(
@@ -54,15 +53,24 @@ def merge_electricity_into_month_inputs(
 
 
 def build_average_weather(start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
-    """Build a synthetic weather history from temps.csv's hardcoded means."""
-    dates = pd.date_range(pd.Timestamp(start).normalize(), pd.Timestamp(end).normalize(), freq="D")
-    return pd.DataFrame(
+    """Build weather from the bundled calendar-day temperature climatology."""
+    profile = pd.read_csv(CLIMATOLOGY_FILE).set_index("calendar_day")
+    dates = pd.date_range(
+        pd.Timestamp(start).normalize(),
+        pd.Timestamp(end).normalize(),
+        freq="D",
+    )
+    calendar_days = pd.Series(dates.strftime("%m-%d"), index=dates)
+    weather = pd.DataFrame(
         {
             "Date": dates,
-            "TMAX (Degrees Fahrenheit)": AVERAGE_TMAX_F,
-            "TMIN (Degrees Fahrenheit)": AVERAGE_TMIN_F,
+            TMAX: calendar_days.map(profile[TMAX]).to_numpy(),
+            TMIN: calendar_days.map(profile[TMIN]).to_numpy(),
         }
     )
+    if weather[[TMAX, TMIN]].isna().any().any():
+        raise ValueError("The bundled electricity climatology is incomplete")
+    return weather
 
 
 def build_occupancy_schedule(
