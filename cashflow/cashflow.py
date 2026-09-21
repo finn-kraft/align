@@ -9,6 +9,7 @@ from cashflow.month_state import ensure_month_defaults
 from cashflow.projection import generate_month_sequence, run_projection as calculate_projection
 from cashflow.saved_run_repository import save_run
 from cashflow.saved_runs import build_saved_run_snapshot
+from cashflow.electricity_dialog import electricity_forecast_dialog_ui, electricity_forecast_server
 # ----------------------------
 # Constants
 # ----------------------------
@@ -177,6 +178,7 @@ def cashflow_ui():
                 ui.input_action_button("load_btn", "Load local draft", class_="w-100"),
             ),
             ui.div(
+                ui.card(electricity_forecast_dialog_ui()),
                 ui.tags.details(
                     {"open": "open"},
                     ui.tags.summary(ui.strong("Monthly inputs")),
@@ -201,6 +203,8 @@ def cashflow_ui():
 # ----------------------------
 
 def cashflow_server(input, output, session):
+    electricity_months = electricity_forecast_server(input, output)
+
 
     month_data = reactive.Value({})
 
