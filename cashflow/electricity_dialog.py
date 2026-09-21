@@ -193,7 +193,11 @@ def electricity_forecast_server(input, output, on_forecast):
                 ),
                 timeout=FORECAST_TIMEOUT_SECONDS,
             )
-            await on_forecast(monthly)
+            applied_count = await on_forecast(monthly)
+            if applied_count == 0:
+                raise ValueError(
+                    "The forecast dates do not overlap the visible cash-flow months."
+                )
         except TimeoutError:
             forecast_months.set({})
             status_value.set(
@@ -207,7 +211,7 @@ def electricity_forecast_server(input, output, on_forecast):
 
         forecast_months.set(monthly)
         status_value.set(
-            f"Electricity forecast added to {len(monthly)} cash-flow month(s)."
+            f"Electricity forecast added to {applied_count} Utilities input(s)."
         )
 
     @output
