@@ -1,37 +1,30 @@
 import unittest
 
-import pandas as pd
-
 from cashflow.electricity_integration import (
-    forecast_to_cashflow_months,
-    merge_electricity_into_month_inputs,
+    AVERAGE_TMAX_F,
+    AVERAGE_TMIN_F,
+    build_average_weather,
+    build_occupancy_schedule,
+    validate_occupancy_dates,
 )
 
 
-class ElectricityIntegrationTests(unittest.TestCase):
-    def test_forecast_maps_predicted_bills_to_monthly_utilities(self):
-        rows = pd.DataFrame(
-            {
-                "Billing From": ["2026-10-01", "2026-10-20", "2026-11-01"],
-                "Predicted Bill": [101.234, 20.0, 88.5],
-            }
-        )
-        self.assertEqual(
-            forecast_to_cashflow_months(rows),
-            {
-                "2026_10": {"utilities": 121.23},
-                "2026_11": {"utilities": 88.50},
-            },
-        )
+class ElectricityInputTests(unittest.TestCase):
+    def test_weather_uses_hardcoded_temperature_means(self):
+        weather = build_average_weather("2026-01-01", "2026-01-03")
+        self.assertEqual(len(weather), 3)
+        self.assertTrue((weather["TMAX (Degrees Fahrenheit)"] == AVERAGE_TMAX_F).all())
+        self.assertTrue((weather["TMIN (Degrees Fahrenheit)"] == AVERAGE_TMIN_F).all())
 
-    def test_merge_preserves_other_cashflow_fields(self):
-        monthly = {"2026_10": {"income": 2000, "utilities": 50, "gas": 100}}
-        merged = merge_electricity_into_month_inputs(
-            monthly, {"2026_10": {"utilities": 121.23}}
+    def test_occupancy_date_range(self):
+        schedule = build_occupancy_schedule(
+            "2026-01-01", "2026-01-05", "2026-01-03", "2026-01-04"
         )
-        self.assertEqual(merged["2026_10"]["income"], 2000)
-        self.assertEqual(merged["2026_10"]["gas"], 100)
-        self.assertEqual(merged["2026_10"]["utilities"], 121.23)
+        self.assertEqual(schedule["Occupied"].tolist(), [0, 0, 1, 1, 0])
+
+    def test_reversed_occupancy_dates_are_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_occupancy_dates("2026-02-01", "2026-01-01")
 
 
 if __name__ == "__main__":
