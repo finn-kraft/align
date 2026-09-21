@@ -193,7 +193,7 @@ def electricity_forecast_server(input, output, on_forecast):
                 ),
                 timeout=FORECAST_TIMEOUT_SECONDS,
             )
-            on_forecast(monthly)
+            await on_forecast(monthly)
         except TimeoutError:
             forecast_months.set({})
             status_value.set(
