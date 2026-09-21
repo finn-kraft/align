@@ -7,7 +7,6 @@ from shiny import reactive, render, ui
 
 from cashflow.electricity_integration import (
     build_average_weather,
-    build_occupancy_schedule,
     forecast_to_cashflow_months,
     uploaded_file_path,
     validate_occupancy_dates,
@@ -18,39 +17,41 @@ def electricity_forecast_dialog_ui():
     return ui.div(
         ui.h4("Electricity forecast"),
         ui.p(
-            "Upload historical usage, then add one or more occupancy periods. "
+            "Upload historical usage and manage one or more occupancy periods. "
             "Weather uses the average highs and lows from the temperature history."
         ),
         ui.input_file("electricity_usage_upload", "Upload usage.csv", accept=[".csv"]),
-        ui.output_ui("electricity_occupancy_periods"),
         ui.input_action_button(
-            "electricity_add_occupancy",
-            "Add occupancy period",
+            "electricity_manage_occupancy",
+            "Add or edit occupancy periods",
             class_="btn-secondary",
         ),
         ui.input_date("electricity_through", "Forecast through"),
         ui.input_action_button(
             "electricity_forecast_btn",
-            "Forecast electricity into cash flow",
+            "Add electricity forecast to cash flow",
             class_="btn-primary",
         ),
         ui.output_text("electricity_forecast_status"),
     )
 
 
-def _occupancy_ranges(input, count: int):
+def _occupancy_ranges(input, periods):
     ranges = []
-    for index in range(1, count + 1):
-        start = input[f"electricity_occupied_from_{index}"]()
-        end = input[f"electricity_occupied_through_{index}"]()
+    for index, period in enumerate(periods, start=1):
+        start = period["start"]
+        end = period["end"]
+        if start is None or end is None:
+            start = input[f"electricity_occupied_from_{index}"]()
+            end = input[f"electricity_occupied_through_{index}"]()
         ranges.append(validate_occupancy_dates(start, end))
     return ranges
 
 
-def run_electricity_forecast(input, occupancy_count: int):
-    """Run the existing engine using the upload and all occupancy periods."""
+def run_electricity_forecast(input, periods):
+    """Run the existing engine using the upload and all saved occupancy periods."""
     usage_path = uploaded_file_path(input.electricity_usage_upload())
-    ranges = _occupancy_ranges(input, occupancy_count)
+    ranges = _occupancy_ranges(input, periods)
     through = pd.Timestamp(input.electricity_through())
     if pd.isna(through):
         raise ValueError("Forecast through date is required")
@@ -82,49 +83,96 @@ def run_electricity_forecast(input, occupancy_count: int):
     return rows, forecast_to_cashflow_months(rows)
 
 
-def electricity_forecast_server(input, output):
+def electricity_forecast_server(input, output, on_forecast):
+    """Manage the occupancy modal and notify cash flow after a successful forecast."""
     forecast_months = reactive.Value({})
     status_value = reactive.Value("")
-    occupancy_count = reactive.Value(1)
+    occupancy_periods = reactive.Value([{"start": None, "end": None}])
+
+    def capture_periods():
+        captured = []
+        for index, period in enumerate(occupancy_periods.get(), start=1):
+            start, end = period["start"], period["end"]
+            try:
+                current_start = input[f"electricity_occupied_from_{index}"]()
+                current_end = input[f"electricity_occupied_through_{index}"]()
+                start = current_start or start
+                end = current_end or end
+            except Exception:
+                pass
+            captured.append({"start": start, "end": end})
+        return captured
+
+    def show_occupancy_modal():
+        periods = occupancy_periods.get()
+        ui.modal_show(
+            ui.modal(
+                ui.h4("Occupancy periods"),
+                ui.p("Add every date range when the home will be occupied."),
+                *[
+                    ui.div(
+                        {"class": "border rounded p-2 mb-2"},
+                        ui.strong(f"Occupancy period {index}"),
+                        ui.input_date(
+                            f"electricity_occupied_from_{index}",
+                            "Start date",
+                            value=period["start"],
+                        ),
+                        ui.input_date(
+                            f"electricity_occupied_through_{index}",
+                            "End date",
+                            value=period["end"],
+                        ),
+                    )
+                    for index, period in enumerate(periods, start=1)
+                ],
+                ui.input_action_button(
+                    "electricity_add_occupancy",
+                    "Add new period",
+                    class_="btn-secondary",
+                ),
+                footer=ui.input_action_button(
+                    "electricity_save_occupancy",
+                    "Done",
+                    class_="btn-primary",
+                ),
+                easy_close=True,
+            )
+        )
+
+    @reactive.effect
+    @reactive.event(input.electricity_manage_occupancy)
+    def manage_occupancy():
+        show_occupancy_modal()
 
     @reactive.effect
     @reactive.event(input.electricity_add_occupancy)
     def add_occupancy_period():
-        occupancy_count.set(occupancy_count.get() + 1)
+        occupancy_periods.set(capture_periods() + [{"start": None, "end": None}])
+        show_occupancy_modal()
 
-    @output
-    @render.ui
-    def electricity_occupancy_periods():
-        return ui.TagList(
-            *[
-                ui.div(
-                    {"class": "border rounded p-2 mb-2"},
-                    ui.strong(f"Occupancy period {index}"),
-                    ui.input_date(
-                        f"electricity_occupied_from_{index}",
-                        "Start date",
-                    ),
-                    ui.input_date(
-                        f"electricity_occupied_through_{index}",
-                        "End date",
-                    ),
-                )
-                for index in range(1, occupancy_count.get() + 1)
-            ]
-        )
+    @reactive.effect
+    @reactive.event(input.electricity_save_occupancy)
+    def save_occupancy_periods():
+        periods = capture_periods()
+        for period in periods:
+            validate_occupancy_dates(period["start"], period["end"])
+        occupancy_periods.set(periods)
+        ui.modal_remove()
 
     @reactive.effect
     @reactive.event(input.electricity_forecast_btn)
     def forecast():
         try:
-            _, monthly = run_electricity_forecast(input, occupancy_count.get())
+            _, monthly = run_electricity_forecast(input, occupancy_periods.get())
         except (OSError, ValueError, KeyError, RuntimeError, TypeError) as error:
             forecast_months.set({})
             status_value.set(f"Forecast failed: {error}")
             return
         forecast_months.set(monthly)
+        on_forecast(monthly)
         status_value.set(
-            f"Electricity forecast loaded for {len(monthly)} cash-flow month(s)."
+            f"Electricity forecast added to {len(monthly)} cash-flow month(s)."
         )
 
     @output

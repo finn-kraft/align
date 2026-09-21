@@ -204,29 +204,30 @@ def cashflow_ui():
 # ----------------------------
 
 def cashflow_server(input, output, session):
-    electricity_months = electricity_forecast_server(input, output)
-
-
     month_data = reactive.Value({})
 
-    @reactive.effect
-    def apply_electricity_forecast_to_inputs():
-        """Copy forecast utilities into the rendered monthly input cards."""
-        forecast_months = electricity_months.get()
-        if not forecast_months:
-            return
-        updated = dict(month_data.get())
-        changed = False
+    def apply_electricity_forecast_to_inputs(forecast_months):
+        """Update both saved month state and the currently visible Utilities inputs."""
+        month_sequence = generate_month_sequence(input.start_month(), input.months())
+        updated, _ = ensure_month_defaults(
+            month_data.get(),
+            [month["key"] for month in month_sequence],
+            default_month_data,
+        )
         for key, values in forecast_months.items():
-            if key not in updated:
+            if key not in updated or "utilities" not in values:
                 continue
-            amount = values.get("utilities")
-            if amount is not None and updated[key].get("utilities") != amount:
-                updated[key] = dict(updated[key])
-                updated[key]["utilities"] = amount
-                changed = True
-        if changed:
-            month_data.set(updated)
+            amount = round(float(values["utilities"]), 2)
+            updated[key] = dict(updated[key])
+            updated[key]["utilities"] = amount
+            session.send_input_message(f"utilities_{key}", {"value": amount})
+        month_data.set(updated)
+
+    electricity_months = electricity_forecast_server(
+        input,
+        output,
+        on_forecast=apply_electricity_forecast_to_inputs,
+    )
 
     @reactive.effect
     @reactive.event(input.start_month, input.months)
@@ -303,7 +304,6 @@ def cashflow_server(input, output, session):
     @reactive.event(input.save_btn)
     def save_scenario():
         state = build_simulation_state(input)
-        monthly_inputs = collect_month_inputs(input, state)
         monthly_inputs = collect_month_inputs(input, state)
         monthly_inputs = merge_electricity_into_month_inputs(monthly_inputs, electricity_months.get())
         projection = calculate_projection(state, monthly_inputs)
