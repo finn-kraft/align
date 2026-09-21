@@ -165,12 +165,12 @@ def electricity_forecast_server(input, output, on_forecast):
     def forecast():
         try:
             _, monthly = run_electricity_forecast(input, occupancy_periods.get())
-        except (OSError, ValueError, KeyError, RuntimeError, TypeError) as error:
+            on_forecast(monthly)
+        except Exception as error:
             forecast_months.set({})
             status_value.set(f"Forecast failed: {error}")
             return
         forecast_months.set(monthly)
-        on_forecast(monthly)
         status_value.set(
             f"Electricity forecast added to {len(monthly)} cash-flow month(s)."
         )

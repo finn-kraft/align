@@ -208,20 +208,15 @@ def cashflow_server(input, output, session):
 
     def apply_electricity_forecast_to_inputs(forecast_months):
         """Update both saved month state and the currently visible Utilities inputs."""
-        month_sequence = generate_month_sequence(input.start_month(), input.months())
-        updated, _ = ensure_month_defaults(
-            month_data.get(),
-            [month["key"] for month in month_sequence],
-            default_month_data,
-        )
+        active_keys = {
+            month["key"]
+            for month in generate_month_sequence(input.start_month(), input.months())
+        }
         for key, values in forecast_months.items():
-            if key not in updated or "utilities" not in values:
+            if key not in active_keys or "utilities" not in values:
                 continue
             amount = round(float(values["utilities"]), 2)
-            updated[key] = dict(updated[key])
-            updated[key]["utilities"] = amount
             session.send_input_message(f"utilities_{key}", {"value": amount})
-        month_data.set(updated)
 
     electricity_months = electricity_forecast_server(
         input,
