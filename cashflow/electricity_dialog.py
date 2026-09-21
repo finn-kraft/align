@@ -52,6 +52,7 @@ def run_electricity_forecast(input):
 
 def electricity_forecast_server(input, output):
     forecast_months = reactive.Value({})
+    status_value = reactive.Value("")
 
     @reactive.effect
     @reactive.event(input.electricity_forecast_btn)
@@ -60,16 +61,16 @@ def electricity_forecast_server(input, output):
             _, monthly = run_electricity_forecast(input)
         except (OSError, ValueError, KeyError, RuntimeError, TypeError) as error:
             forecast_months.set({})
-            status.set(f"Forecast failed: {error}")
+            status_value.set(f"Forecast failed: {error}")
             return
         forecast_months.set(monthly)
-        status.set(
+        status_value.set(
             f"Electricity forecast loaded for {len(monthly)} cash-flow month(s)."
         )
 
     @output
     @render.text
     def status():
-        return ""
+        return status_value()
 
     return forecast_months
