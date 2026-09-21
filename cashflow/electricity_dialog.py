@@ -9,6 +9,7 @@ from shiny import reactive, render, ui
 
 from cashflow.electricity_integration import (
     build_average_weather,
+    build_training_occupancy,
     forecast_to_cashflow_months,
     uploaded_file_path,
     validate_occupancy_dates,
@@ -58,12 +59,9 @@ def run_electricity_forecast(usage_path, through_value, periods):
     weather_end = max(usage["Billing To"].max(), through, *(end for _, end in ranges))
     weather = build_average_weather(weather_start, weather_end)
 
-    occupancy = pd.DataFrame({"Date": weather["Date"], "Occupied": 0})
-    for start, end in ranges:
-        occupancy.loc[
-            occupancy["Date"].between(start.normalize(), end.normalize()),
-            "Occupied",
-        ] = 1
+    # Fit against the engine's historical recurring occupancy pattern.
+    # The ranges entered in the dialog apply only to future predictions below.
+    occupancy = build_training_occupancy(weather_start, weather_end)
 
     from cashflow.forecasting_engines.electricity_forecast_package.electricity_forecast import (
         ElectricityForecaster,

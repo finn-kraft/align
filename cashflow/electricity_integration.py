@@ -73,6 +73,29 @@ def build_average_weather(start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFram
     return weather
 
 
+def build_training_occupancy(start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    """Build the existing engine's recurring historical occupancy schedule."""
+    dates = pd.date_range(
+        pd.Timestamp(start).normalize(),
+        pd.Timestamp(end).normalize(),
+        freq="D",
+    )
+
+    def is_occupied(value: pd.Timestamp) -> int:
+        month_day = (value.month, value.day)
+        return int(
+            (1, 5) <= month_day <= (5, 5)
+            or (8, 10) <= month_day <= (12, 11)
+        )
+
+    return pd.DataFrame(
+        {
+            "Date": dates,
+            "Occupied": [is_occupied(value) for value in dates],
+        }
+    )
+
+
 def build_occupancy_schedule(
     start: pd.Timestamp,
     end: pd.Timestamp,
